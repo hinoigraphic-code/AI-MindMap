@@ -1,0 +1,1703 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AIマインドマップ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; overscroll-behavior: none; }
+    .touch-none { touch-action: none; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; } html, body { height: 100%; position: fixed; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxgDw8JHz98WLFUKpkDPf0tP15POaI2KpDxDf9ev9UDrv1XsFTk1W89yWKAuRLkpV8t/exec";
+
+    const createIcon = (faClass) => ({ size = 24, className = "" }) => (
+      <i className={`${faClass} ${className}`} style={{ fontSize: size, width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></i>
+    );
+
+    const Plus = createIcon("fas fa-plus"); const Trash2 = createIcon("fas fa-trash-alt");
+    const ZoomIn = createIcon("fas fa-search-plus"); const ZoomOut = createIcon("fas fa-search-minus");
+    const Maximize = createIcon("fas fa-expand"); const Edit2 = createIcon("fas fa-edit");
+    const Info = createIcon("fas fa-info-circle"); const Download = createIcon("fas fa-download");
+    const Upload = createIcon("fas fa-upload"); const GripHorizontal = createIcon("fas fa-grip-horizontal");
+    const X = createIcon("fas fa-times"); const Unlink = createIcon("fas fa-unlink");
+    const Sparkles = createIcon("fas fa-wand-magic-sparkles"); const Wand2 = createIcon("fas fa-magic");
+    const FileText = createIcon("fas fa-file-alt"); const ListChecks = createIcon("fas fa-tasks");
+    const Network = createIcon("fas fa-project-diagram"); const MessageSquareWarning = createIcon("fas fa-exclamation-triangle");
+    const SmilePlus = createIcon("fas fa-smile-beam"); const Lightbulb = createIcon("fas fa-lightbulb");
+    const HelpCircle = createIcon("fas fa-question-circle"); const ListTree = createIcon("fas fa-sitemap");
+    const TextSelect = createIcon("fas fa-file-word"); const Loader2 = createIcon("fas fa-spinner fa-spin");
+    const Copy = createIcon("fas fa-copy"); const Check = createIcon("fas fa-check");
+    const Undo2 = createIcon("fas fa-undo"); const Redo2 = createIcon("fas fa-redo");
+    const Link2 = createIcon("fas fa-link"); const MapIcon = createIcon("fas fa-map"); 
+    const ServerIcon = createIcon("fas fa-cloud"); const SettingsIcon = createIcon("fas fa-cog");
+    const ClipboardList = createIcon("fas fa-clipboard-list"); const LayoutIcon = createIcon("fas fa-sitemap");
+    const TargetIcon = createIcon("fas fa-crosshairs"); const CameraIcon = createIcon("fas fa-camera"); 
+    const MicIcon = createIcon("fas fa-microphone"); const StopCircleIcon = createIcon("fas fa-stop-circle");
+    const Minus = createIcon("fas fa-minus"); 
+    // ★追加: 順番入れ替え用アイコン
+    const ArrowUp = createIcon("fas fa-arrow-up"); const ArrowDown = createIcon("fas fa-arrow-down");
+    // ★追加: ハンバーガーメニュー用アイコン
+    const MenuIcon = createIcon("fas fa-bars");
+    // ★追加: 画像読み込み用アイコン
+    const ImageIcon = createIcon("fas fa-image");
+
+    const getInitialNodes = () => [{ id: 'root', text: 'メインテーマ', x: 0, y: 0, parentId: null, isCollapsed: false }];
+    const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+    // ★追加: 階層ごとの色を決定する関数
+    const getNodeColors = (depth, isRoot, isSelected) => {
+      if (isRoot || depth === 0) return `bg-indigo-600 text-white ${isSelected ? 'ring-4 ring-indigo-300' : ''}`;
+      
+      // 階層1〜5までの淡いカラーテーマ（6以降はループします）
+      const themes = [
+        { bg: 'bg-blue-50', text: 'text-blue-900', border: 'border-blue-200', ring: 'ring-blue-200' },
+        { bg: 'bg-emerald-50', text: 'text-emerald-900', border: 'border-emerald-200', ring: 'ring-emerald-200' },
+        { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-200', ring: 'ring-amber-200' },
+        { bg: 'bg-rose-50', text: 'text-rose-900', border: 'border-rose-200', ring: 'ring-rose-200' },
+        { bg: 'bg-purple-50', text: 'text-purple-900', border: 'border-purple-200', ring: 'ring-purple-200' },
+      ];
+      const theme = themes[(depth - 1) % themes.length];
+      
+      // 選択されている場合は太いボーダーに、そうでない場合はテーマのボーダーを適用
+      return `${theme.bg} ${theme.text} ${isSelected ? `ring-4 ${theme.ring} border-indigo-500` : theme.border}`;
+    };
+
+    const callAI = async (prompt, systemInstruction = "", useJson = false, apiKey, modelName) => {
+      if (!apiKey) throw new Error("API_KEY_MISSING");
+      const currentModel = modelName || "gemini-3.1-flash-lite-preview";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      const payload = { contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: systemInstruction }] } };
+      if (useJson) payload.generationConfig = { responseMimeType: "application/json" };
+
+      let delay = 1000;
+      for (let i = 0; i < 5; i++) {
+        try {
+          const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!response.ok) { const err = await response.json(); throw new Error(`API Error: ${err.error?.message || response.status}`); }
+          const result = await response.json(); return result.candidates?.[0]?.content?.parts?.[0]?.text;
+        } catch (e) {
+          if (e.message.includes("API_KEY_MISSING") || e.message.includes("API key not valid")) throw e;
+          if (i === 4) throw e;
+          await new Promise(res => setTimeout(res, delay)); delay *= 2;
+        }
+      }
+    };
+
+    const callAIAudio = async (base64Audio, mimeType, apiKey, modelName) => {
+      if (!apiKey) throw new Error("API_KEY_MISSING");
+      const currentModel = modelName || "gemini-3.1-flash-lite-preview";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      const prompt = "以下の音声を文字起こししてください。その際、「えーと」や「あのー」などのフィラーワード（ケバ）を取り除き、言い間違いを自然に補正して、シンプルなテキストのみを出力してください。説明やMarkdown装飾は一切不要です。";
+      const payload = { contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Audio } }] }] };
+
+      let delay = 1000;
+      for (let i = 0; i < 5; i++) {
+        try {
+          const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!response.ok) { const err = await response.json(); throw new Error(`API Error: ${err.error?.message || response.status}`); }
+          const result = await response.json(); return result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        } catch (e) {
+          if (e.message.includes("API_KEY_MISSING") || e.message.includes("API key not valid")) throw e;
+          if (i === 4) throw e;
+          await new Promise(res => setTimeout(res, delay)); delay *= 2;
+        }
+      }
+    };
+
+    // ★追加: 画像を認識するためのAI関数
+    const callAIImage = async (base64Image, mimeType, apiKey, modelName) => {
+      if (!apiKey) throw new Error("API_KEY_MISSING");
+      // ★修正: 固定のモデル名を廃止し、設定画面のモデル（指定がない場合は安定したgemini-3.1-flash-lite-preview）を使用する
+      const currentModel = modelName || "gemini-3.1-flash-lite-preview";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      const prompt = "この画像は手書きのマインドマップです。内容を読み取り、以下のJSON形式の階層構造で出力してください。\n[{ \"id\": \"英数字\", \"text\": \"テキスト\", \"parentId\": \"親id(ルートはnull)\" }]";
+      const payload = { 
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Image } }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      let delay = 1000;
+      for (let i = 0; i < 5; i++) {
+        try {
+          const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!response.ok) { const err = await response.json(); throw new Error(`API Error: ${err.error?.message || response.status}`); }
+          const result = await response.json(); return result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        } catch (e) {
+          if (e.message.includes("API_KEY_MISSING") || e.message.includes("API key not valid")) throw e;
+          if (i === 4) throw e;
+          await new Promise(res => setTimeout(res, delay)); delay *= 2;
+        }
+      }
+    };
+
+    // --- GAS API クライアント ---
+    const fetchMapsAndKeyFromGAS = async () => {
+      try { 
+        const res = await fetch(`${GAS_URL}?action=list`); 
+        const json = await res.json(); 
+        return { maps: json.success ? json.maps : [], apiKey: json.apiKey || '' }; 
+      } catch (e) { console.error("Fetch Error:", e); return { maps: [], apiKey: '' }; }
+    };
+
+    const loadMapFromGAS = async (id) => {
+      try { const res = await fetch(`${GAS_URL}?action=load&id=${id}`); const json = await res.json(); return json.success ? json.map : null; } 
+      catch (e) { console.error("Load Map Error:", e); return null; }
+    };
+
+    const saveMapToGAS = async (id, title, nodes) => {
+      try {
+        const payload = { action: 'save', id, title, nodes };
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        return true; 
+      } catch (e) { console.error("Save Map Error:", e); return false; }
+    };
+
+    const deleteMapFromGAS = async (id) => {
+      try {
+        const payload = { action: 'delete', id };
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        return true;
+      } catch (e) { console.error("Delete Map Error:", e); return false; }
+    };
+
+    function App() {
+      const [apiKey, setApiKey] = useState('');
+      const [modelName, setModelName] = useState(localStorage.getItem('gemini_model_name') || 'gemini-3.1-flash-lite-preview');
+      const [settingsModal, setSettingsModal] = useState(false);
+      const tempModelNameRef = useRef(modelName);
+
+      const [maps, setMaps] = useState([]);
+      const [currentMapId, setCurrentMapId] = useState(null);
+      const currentMapIdRef = useRef(null);
+      const hasInitializedRef = useRef(false); 
+
+      const changeCurrentMapId = (id) => { currentMapIdRef.current = id; setCurrentMapId(id); };
+
+      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+      const [syncStatus, setSyncStatus] = useState('');
+      const [mapToDelete, setMapToDelete] = useState(null);
+
+      const [nodes, setNodes] = useState(getInitialNodes());
+      const [past, setPast] = useState([]);
+      const [future, setFuture] = useState([]);
+      const [suggestedNodes, setSuggestedNodes] = useState([]);
+      const [pan, setPan] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      const [zoom, setZoom] = useState(1);
+      const [selectedNodeId, setSelectedNodeId] = useState('root');
+      const [editingNodeId, setEditingNodeId] = useState(null);
+      const [errorMessage, setErrorMessage] = useState(null);
+      // ★修正: 初期状態で操作ガイドを閉じる
+      const [showHelp, setShowHelp] = useState(false);
+      const [dropTargetId, setDropTargetId] = useState(null);
+      
+      // ★追加: 右上のハンバーガーメニューの開閉状態
+      const [isMenuOpen, setIsMenuOpen] = useState(false);
+      const [linkState, setLinkState] = useState({ isLinking: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+
+      const [focusSelection, setFocusSelection] = useState(new Set());
+      const [isFocusActive, setIsFocusActive] = useState(false);
+      
+      // ★追加: レイアウト形式のState（tree: ツリー型, radial: 放射状）
+      const [layoutType, setLayoutType] = useState('tree');
+      
+      const [isCapturing, setIsCapturing] = useState(false);
+      const [captureBox, setCaptureBox] = useState({ minX: 0, minY: 0, width: 0, height: 0 });
+
+      const [recordingNodeId, setRecordingNodeId] = useState(null);
+      const mediaRecorderRef = useRef(null);
+      const audioChunksRef = useRef([]);
+
+      const [nodeAIMenuId, setNodeAIMenuId] = useState(null);
+      const [showAIPanel, setShowAIPanel] = useState(false);
+      const [aiLoading, setAiLoading] = useState(false);
+      const [aiModal, setAiModal] = useState({ isOpen: false, title: '', content: '', isMarkdown: false });
+      const [textInputModal, setTextInputModal] = useState(false);
+      const [inputText, setInputText] = useState("");
+      
+      const [exportTextModal, setExportTextModal] = useState(false);
+      const [exportedText, setExportedText] = useState("");
+      const [copied, setCopied] = useState(false);
+
+      const isPanning = useRef(false); const lastPanPos = useRef({ x: 0, y: 0 }); const containerRef = useRef(null); const lastTouchDistance = useRef(null);
+      const fileInputRef = useRef(null); const dropTargetIdRef = useRef(null);
+      const imageInputRef = useRef(null); // ★追加: 画像読み込み用Ref
+      const dragInfo = useRef({ isDragging: false, nodeId: null, startX: 0, startY: 0, initialPositions: new Map(), initialNodesForHistory: null });
+      const linkInfo = useRef({ isLinking: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, initialNodesForHistory: null });
+      const nodesRef = useRef(nodes);
+      const saveTimeoutRef = useRef(null);
+      const skipNextSaveRef = useRef(false);
+
+      useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
+    // ★スマホ用ピンチズームの修正（中心点対応版）
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const handleTouchMove = (e) => {
+        if (e.touches.length === 2) {
+          e.preventDefault(); // ブラウザ独自のズームを防止
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          
+          // 指と指の距離
+          const distance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+          // 指と指の中心点（画面上の座標）
+          const centerX = (t1.clientX + t2.clientX) / 2;
+          const centerY = (t1.clientY + t2.clientY) / 2;
+
+          if (lastTouchDistance.current !== null) {
+            const delta = distance - lastTouchDistance.current;
+            const zoomStep = delta * 0.005; // ズーム感度を少しマイルドに調整
+            
+            setZoom(prevZoom => {
+              const newZoom = Math.min(Math.max(0.1, prevZoom + zoomStep), 3);
+              
+              // ズーム前後の倍率比から、中心点を維持するための移動量を計算
+              setPan(prevPan => {
+                const ratio = newZoom / prevZoom;
+                const dx = centerX - prevPan.x;
+                const dy = centerY - prevPan.y;
+                return {
+                  x: prevPan.x - (dx * ratio - dx),
+                  y: prevPan.y - (dy * ratio - dy)
+                };
+              });
+              
+              return newZoom;
+            });
+          }
+          lastTouchDistance.current = distance;
+        }
+      };
+
+      const handleTouchEnd = () => { lastTouchDistance.current = null; };
+
+      container.addEventListener('touchmove', handleTouchMove, { passive: false });
+      container.addEventListener('touchend', handleTouchEnd);
+      return () => {
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
+      };
+    }, []);
+
+      const resetView = useCallback((targetNodes = null) => {
+        // 描画が完了してから確実に中央へ移動させるために少し遅らせる
+        setTimeout(() => {
+          setZoom(1); 
+          if (containerRef.current) {
+            // イベントオブジェクトが渡された場合（リサイズ時やボタンクリック時など）は無視する
+            const currentNodes = Array.isArray(targetNodes) ? targetNodes : nodesRef.current;
+            // ルートノード（親がないノード）、見つからなければ最初のノードを基準にする
+            const rootNode = currentNodes.find(node => !node.parentId) || currentNodes[0];
+            const rootX = rootNode ? rootNode.x : 0;
+            const rootY = rootNode ? rootNode.y : 0;
+            setPan({ 
+              x: containerRef.current.clientWidth / 2 - rootX, 
+              y: containerRef.current.clientHeight / 2 - rootY 
+            });
+          }
+        }, 50);
+      }, []);
+
+      // ★修正: 勝手に画面中央に戻る（視点リセット）のを防ぐため、画面サイズ変更時のリセットを完全廃止
+      useEffect(() => { 
+        // ツール立ち上げ時の初回ロード時のみ1回だけ中央に合わせる
+        resetView(); 
+      }, [resetView]);
+      // --- GASからの初期データロード ---
+      useEffect(() => {
+        let isMounted = true;
+        fetchMapsAndKeyFromGAS().then(({ maps: mapList, apiKey: loadedKey }) => {
+          if (!isMounted) return;
+          if (loadedKey) setApiKey(loadedKey);
+
+          if (!hasInitializedRef.current) {
+            hasInitializedRef.current = true;
+            setMaps(mapList);
+            if (mapList.length > 0) {
+              handleLoadMap(mapList[0].id); 
+            } else {
+              handleCreateNewMap(); 
+            }
+          }
+        });
+        return () => { isMounted = false; };
+      }, []); 
+
+      // --- GASへの自動同期 ---
+      useEffect(() => {
+        if (!currentMapIdRef.current) return;
+        if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
+
+        setSyncStatus('同期中...');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(async () => {
+          const rootNode = nodes.find(n => !n.parentId);
+          const title = rootNode ? rootNode.text : '無題のマップ';
+          const targetMapId = currentMapIdRef.current; 
+          
+          setMaps(prev => {
+            const exists = prev.find(m => m.id === targetMapId);
+            if (exists) return prev.map(m => m.id === targetMapId ? { ...m, title, updatedAt: Date.now() } : m).sort((a,b)=>b.updatedAt - a.updatedAt);
+            return [{ id: targetMapId, title, updatedAt: Date.now() }, ...prev];
+          });
+
+          await saveMapToGAS(targetMapId, title, JSON.stringify(nodes));
+          setSyncStatus('クラウド保存完了');
+          setTimeout(() => setSyncStatus(''), 2000);
+        }, 1500); 
+      }, [nodes]); 
+
+      // ==========================================
+      // ★自動レイアウト（重なり完全防止・スマート余白・階層計算版）
+      // ==========================================
+      const applyAutoLayout = useCallback((currentNodes, forceLayoutType = null) => {
+        const currentLayout = forceLayoutType || layoutType;
+        if (!currentNodes || currentNodes.length === 0) return currentNodes;
+
+        const nodeInfo = {};
+        currentNodes.forEach(n => {
+          const textLength = n.text ? n.text.replace(/\n/g, '').length : 0;
+          const w = Math.min(340, Math.max(160, textLength * 16 + 60));
+          const charsPerLine = Math.max(8, Math.floor((w - 40) / 16));
+          
+          let estimatedLines = 0;
+          const lines = n.text ? n.text.split('\n') : [''];
+          lines.forEach(l => {
+            const len = l.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_').length;
+            estimatedLines += Math.max(1, Math.ceil((len || 1) / charsPerLine));
+          });
+          
+          const h = estimatedLines * 24 + 80; 
+          // ★ depth（深さ）を初期化
+          nodeInfo[n.id] = { ...n, children: [], h, w, depth: 0, treeHeight: 0, isCollapsed: n.isCollapsed || false };
+        });
+
+        const roots = [];
+        currentNodes.forEach(n => {
+          if (n.parentId && nodeInfo[n.parentId]) {
+            nodeInfo[n.parentId].children.push(n.id);
+          } else {
+            roots.push(n.id);
+          }
+        });
+
+        Object.values(nodeInfo).forEach(info => info.children.sort((a, b) => nodeInfo[a].y - nodeInfo[b].y));
+        roots.sort((a, b) => nodeInfo[a].y - nodeInfo[b].y);
+
+        const calcTreeHeight = (id) => {
+          const info = nodeInfo[id];
+          if (info.children.length === 0 || info.isCollapsed) {
+            info.treeHeight = info.h + 40;
+            return info.treeHeight;
+          }
+          let th = 0;
+          info.children.forEach(cid => { th += calcTreeHeight(cid); });
+          info.treeHeight = Math.max(info.h + 40, th);
+          return info.treeHeight;
+        };
+        roots.forEach(calcTreeHeight);
+
+        if (currentLayout === 'radial' && roots.length === 1) {
+          const rootId = roots[0];
+          const rootInfo = nodeInfo[rootId];
+          rootInfo.newX = rootInfo.x;
+          rootInfo.newY = rootInfo.y;
+          rootInfo.depth = 0;
+
+          const children = rootInfo.children;
+          const rightChildren = children.filter((_, i) => i % 2 === 0);
+          const leftChildren = children.filter((_, i) => i % 2 !== 0);
+
+          // ★ depthを子ノードへ伝播させる
+          const assignPosRadial = (id, x, startY, parentX, parentY, isHidden, direction, depth) => {
+            const info = nodeInfo[id];
+            info.depth = depth;
+            if (isHidden) {
+              info.newX = parentX; info.newY = parentY;
+            } else {
+              info.newX = x; info.newY = startY + info.treeHeight / 2; 
+            }
+            let cy = startY;
+            info.children.forEach(cid => {
+              const childIsHidden = isHidden || info.isCollapsed;
+              const distanceX = info.w / 2 + nodeInfo[cid].w / 2 + 60;
+              const nextX = direction === 'right' ? info.newX + distanceX : info.newX - distanceX;
+              assignPosRadial(cid, nextX, cy, info.newX, info.newY, childIsHidden, direction, depth + 1); 
+              if (!childIsHidden) cy += nodeInfo[cid].treeHeight;
+            });
+          };
+
+          let rightY = rootInfo.y - rightChildren.reduce((sum, cid) => sum + nodeInfo[cid].treeHeight, 0) / 2;
+          rightChildren.forEach(cid => {
+            const distanceX = rootInfo.w / 2 + nodeInfo[cid].w / 2 + 60;
+            assignPosRadial(cid, rootInfo.newX + distanceX, rightY, rootInfo.newX, rootInfo.newY, false, 'right', 1);
+            rightY += nodeInfo[cid].treeHeight;
+          });
+
+          let leftY = rootInfo.y - leftChildren.reduce((sum, cid) => sum + nodeInfo[cid].treeHeight, 0) / 2;
+          leftChildren.forEach(cid => {
+            const distanceX = rootInfo.w / 2 + nodeInfo[cid].w / 2 + 60;
+            assignPosRadial(cid, rootInfo.newX - distanceX, leftY, rootInfo.newX, rootInfo.newY, false, 'left', 1);
+            leftY += nodeInfo[cid].treeHeight;
+          });
+
+        } else {
+          // ★ depthを子ノードへ伝播させる
+          const assignPos = (id, x, startY, parentX, parentY, isHidden, depth) => {
+            const info = nodeInfo[id];
+            info.depth = depth;
+            if (isHidden) {
+              info.newX = parentX; info.newY = parentY;
+            } else {
+              info.newX = x; info.newY = startY + info.treeHeight / 2; 
+            }
+            let cy = startY;
+            info.children.forEach(cid => {
+              const childIsHidden = isHidden || info.isCollapsed;
+              const distanceX = info.w / 2 + nodeInfo[cid].w / 2 + 60;
+              assignPos(cid, info.newX + distanceX, cy, info.newX, info.newY, childIsHidden, depth + 1); 
+              if (!childIsHidden) cy += nodeInfo[cid].treeHeight;
+            });
+          };
+
+          let startRootY = roots.length > 0 ? nodeInfo[roots[0]].y - calcTreeHeight(roots[0]) / 2 : 0;
+          let rootX = roots.length > 0 ? nodeInfo[roots[0]].x : 0;
+
+          let currentRootY = startRootY;
+          roots.forEach(rid => {
+            assignPos(rid, rootX, currentRootY, rootX, currentRootY, false, 0);
+            currentRootY += nodeInfo[rid].treeHeight + 40;
+          });
+        }
+
+        // ★計算した幅(w)と深さ(depth)をノード情報に保存する
+        return currentNodes.map(n => ({ 
+          ...n, 
+          x: nodeInfo[n.id].newX, 
+          y: nodeInfo[n.id].newY, 
+          w: nodeInfo[n.id].w, 
+          depth: nodeInfo[n.id].depth,
+          isCollapsed: nodeInfo[n.id].isCollapsed 
+        }));
+      }, [layoutType]);
+
+      const layoutedAndCollapsedNodes = useMemo(() => {
+        const renderable = new Set();
+        const traverse = (nodeId, isVisible) => {
+          const node = nodes.find(n => n.id === nodeId);
+          if (!node) return;
+          if (isVisible) renderable.add(nodeId);
+          const children = nodes.filter(n => n.parentId === nodeId);
+          children.forEach(c => traverse(c.id, isVisible && !node.isCollapsed));
+        };
+        const roots = nodes.filter(n => !n.parentId);
+        roots.forEach(r => traverse(r.id, true));
+        return nodes.filter(n => renderable.has(n.id));
+      }, [nodes]);
+
+      const visibleNodes = useMemo(() => {
+        if (!isFocusActive || focusSelection.size === 0) return layoutedAndCollapsedNodes;
+        
+        const vIds = new Set();
+        focusSelection.forEach(id => {
+          let curr = id;
+          while (layoutedAndCollapsedNodes.find(n => n.id === curr)) {
+            vIds.add(curr);
+            const node = layoutedAndCollapsedNodes.find(n => n.id === curr);
+            curr = node ? node.parentId : null;
+          }
+        });
+        return layoutedAndCollapsedNodes.filter(n => vIds.has(n.id));
+      }, [layoutedAndCollapsedNodes, focusSelection, isFocusActive]);
+
+
+      // --- フォーカスモードと音声入力 ---
+      const toggleFocusSelection = (id) => {
+        setFocusSelection(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+        });
+      };
+
+      const clearFocus = () => {
+        setFocusSelection(new Set());
+        setIsFocusActive(false);
+      };
+
+      const startRecording = async (nodeId) => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new MediaRecorder(stream);
+          mediaRecorderRef.current = mediaRecorder;
+          audioChunksRef.current = [];
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            const mime = mediaRecorder.mimeType || 'audio/webm';
+            const audioBlob = new Blob(audioChunksRef.current, { type: mime });
+            const reader = new FileReader();
+            reader.readAsDataURL(audioBlob);
+            reader.onloadend = async () => {
+              const base64data = reader.result.split(',')[1];
+              let fileMimeType = audioBlob.type.split(';')[0];
+              if (!fileMimeType) fileMimeType = 'audio/webm';
+              
+              setAiLoading(true);
+              try {
+                const transcribedText = await callAIAudio(base64data, fileMimeType, apiKey, modelName);
+                if (transcribedText) {
+                  setNodesWithHistory(prev => {
+                    const updatedNodes = prev.map(n => {
+                      if (n.id === nodeId) {
+                        const newText = n.text ? n.text + '\n' + transcribedText : transcribedText;
+                        return { ...n, text: newText };
+                      }
+                      return n;
+                    });
+                    return applyAutoLayout(updatedNodes);
+                  });
+                }
+              } catch(e) {
+                handleAIError(e);
+              } finally {
+                setAiLoading(false);
+              }
+            };
+          };
+
+          mediaRecorder.start();
+          setRecordingNodeId(nodeId);
+        } catch(e) {
+          console.error("Mic error:", e);
+          setErrorMessage("マイクへのアクセスが許可されていないか、利用できません。");
+        }
+      };
+
+      const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        setRecordingNodeId(null);
+      };
+
+
+      // ==========================================
+      // ★順番入れ替え（Move Up/Down）ロジック
+      // ==========================================
+      const moveNode = useCallback((nodeId, direction) => {
+        setNodesWithHistory(prev => {
+          const node = prev.find(n => n.id === nodeId);
+          if (!node) return prev;
+
+          // 親が同じノード（兄弟）を現在の画面上のY座標の順に取得する
+          const siblings = prev.filter(n => n.parentId === node.parentId).sort((a, b) => a.y - b.y);
+          const siblingIndex = siblings.findIndex(n => n.id === nodeId);
+
+          let targetNode = null;
+          if (direction === 'up' && siblingIndex > 0) {
+            targetNode = siblings[siblingIndex - 1];
+          } else if (direction === 'down' && siblingIndex < siblings.length - 1) {
+            targetNode = siblings[siblingIndex + 1];
+          }
+
+          if (targetNode) {
+            // Y座標を強制的に入れ替えることで、次のapplyAutoLayoutのソート順を入れ替える
+            const nextNodes = prev.map(n => {
+              if (n.id === node.id) return { ...n, y: targetNode.y };
+              if (n.id === targetNode.id) return { ...n, y: node.y };
+              return n;
+            });
+            return applyAutoLayout(nextNodes);
+          }
+          return prev; // 移動できない場合は何もしない
+        });
+      }, [setNodesWithHistory, applyAutoLayout]);
+
+
+      // ==========================================
+      // ★スナップショット用：画像化処理
+      // ==========================================
+      const takeSnapshot = async () => {
+        if (visibleNodes.length === 0) return;
+        
+        const padding = 50;
+        const minX = Math.min(...visibleNodes.map(n => n.x)) - 150 - padding;
+        const maxX = Math.max(...visibleNodes.map(n => n.x)) + 150 + padding;
+        const minY = Math.min(...visibleNodes.map(n => n.y)) - 100 - padding;
+        const maxY = Math.max(...visibleNodes.map(n => n.y)) + 100 + padding;
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        setCaptureBox({ minX, minY, width, height });
+        setIsCapturing(true);
+
+        setTimeout(async () => {
+          const element = document.getElementById('snapshot-area');
+          if (element) {
+            try {
+              const canvas = await html2canvas(element, { 
+                backgroundColor: '#f8fafc',
+                scale: 2 
+              });
+              const url = canvas.toDataURL('image/png');
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `mindmap_${isFocusActive ? 'focus_' : ''}${new Date().getTime()}.png`;
+              a.click();
+            } catch (e) {
+              console.error("キャプチャエラー:", e);
+              setErrorMessage("画像の保存に失敗しました。");
+            }
+          }
+          setIsCapturing(false);
+        }, 800); 
+      };
+
+      const handleFinishEdit = useCallback(() => {
+        setEditingNodeId(null);
+        setNodesWithHistory(prev => applyAutoLayout(prev));
+      }, [applyAutoLayout, setNodesWithHistory]);
+
+      // --- クラウドアクション ---
+      const handleCreateNewMap = async (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        hasInitializedRef.current = true; 
+
+        const newId = generateId(); 
+        const newTitle = 'メインテーマ';
+        const freshNodes = getInitialNodes(); 
+        
+        skipNextSaveRef.current = true;
+        changeCurrentMapId(newId); 
+        setNodes(freshNodes); 
+        setPast([]); setFuture([]); 
+        clearFocus();
+        resetView(); setIsSidebarOpen(false);
+
+        setMaps(prev => {
+          if (prev.find(m => m.id === newId)) return prev;
+          return [{ id: newId, title: newTitle, updatedAt: Date.now() }, ...prev];
+        });
+
+        setSyncStatus('新規作成中...');
+        saveMapToGAS(newId, newTitle, JSON.stringify(freshNodes))
+          .then(() => {
+            setSyncStatus('クラウド保存完了'); 
+            setTimeout(() => setSyncStatus(''), 2000);
+          })
+          .catch(() => setSyncStatus('エラー'));
+      };
+
+      const handleLoadMap = async (id, e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        hasInitializedRef.current = true; 
+
+        setSyncStatus('読み込み中...');
+        const mapData = await loadMapFromGAS(id);
+        if (mapData) {
+          skipNextSaveRef.current = true;
+          changeCurrentMapId(id);
+          setNodes(mapData.nodes ? JSON.parse(mapData.nodes) : getInitialNodes());
+          setPast([]); setFuture([]); clearFocus(); resetView(); setIsSidebarOpen(false);
+          setSyncStatus('');
+        } else {
+          setErrorMessage("マップの読み込みに失敗しました。");
+          setSyncStatus('エラー');
+        }
+      };
+
+      const confirmDeleteMap = async (id, e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        setSyncStatus('削除中...');
+        const newMaps = maps.filter(m => m.id !== id);
+        setMaps(newMaps); 
+        setMapToDelete(null);
+        
+        if (currentMapIdRef.current === id) {
+          changeCurrentMapId(null);
+          if (newMaps.length > 0) { handleLoadMap(newMaps[0].id); } 
+          else { setNodes(getInitialNodes()); clearFocus(); }
+        }
+
+        const success = await deleteMapFromGAS(id);
+        if (success) { setSyncStatus(''); } else { setSyncStatus('エラー'); }
+      };
+
+      // --- ユーティリティ ---
+      const isDescendant = useCallback((ancestorId, targetId, currentNodes) => {
+        if (ancestorId === targetId) return true; let current = currentNodes.find(n => n.id === targetId);
+        while (current && current.parentId) { if (current.parentId === ancestorId) return true; current = currentNodes.find(n => n.id === current.parentId); }
+        return false;
+      }, []);
+
+      const getDescendantIds = useCallback((parentId, currentNodes) => {
+        let ids = []; const children = currentNodes.filter(n => n.parentId === parentId);
+        for (const child of children) { ids.push(child.id); ids = ids.concat(getDescendantIds(child.id, currentNodes)); }
+        return ids;
+      }, []);
+
+      // ★修正: 画面の並び順（y座標の昇順）とMarkdownの出力を完全に一致させる
+      const buildMapText = (targetNodes) => {
+        // 親がいないルートノードを y 座標でソート
+        const roots = targetNodes.filter(n => !n.parentId).sort((a, b) => a.y - b.y); 
+        let text = "";
+        const traverse = (node, depth) => { 
+          text += `${"  ".repeat(depth)}- ${node.text}\n`; 
+          // 子ノードも y 座標の順にソートして再帰処理
+          const children = targetNodes.filter(n => n.parentId === node.id).sort((a, b) => a.y - b.y);
+          children.forEach(c => traverse(c, depth + 1)); 
+        };
+        roots.forEach(r => traverse(r, 0)); 
+        return text;
+      };
+
+      const getContextPath = (nodeId, currentNodes) => {
+        let path = []; let current = currentNodes.find(n => n.id === nodeId);
+        while (current) { path.unshift(current.text); current = currentNodes.find(n => n.id === current.parentId); }
+        return path.join(" > ");
+      };
+
+      // --- 履歴管理 ---
+      const setNodesWithHistory = useCallback((action) => {
+        setNodes(prev => {
+          const next = typeof action === 'function' ? action(prev) : action;
+          if (JSON.stringify(prev) !== JSON.stringify(next)) { setPast(p => [...p, prev]); setFuture([]); }
+          return next;
+        });
+      }, []);
+
+      const undo = useCallback(() => {
+        if (past.length === 0) return; const previous = past[past.length - 1];
+        setPast(prev => prev.slice(0, -1)); setFuture(prev => [nodesRef.current, ...prev]);
+        setNodes(previous); setSelectedNodeId(null);
+      }, [past]);
+
+      const redo = useCallback(() => {
+        if (future.length === 0) return; const next = future[0];
+        setFuture(prev => prev.slice(1)); setPast(prev => [...prev, nodesRef.current]);
+        setNodes(next); setSelectedNodeId(null);
+      }, [future]);
+
+      // --- AI機能群 ---
+      const handleAIError = (e) => {
+        console.error(e); setAiLoading(false);
+        if (e.message.includes("API_KEY_MISSING") || e.message.includes("API key not valid") || e.message.includes("models/")) { 
+          setErrorMessage("APIキーまたはモデル名が不正です。設定とGAS側のキーを確認してください。"); 
+        } else { setErrorMessage("AIの処理中にエラーが発生しました。"); }
+      };
+
+      const generateSuggestions = async (nodeId) => {
+        setNodeAIMenuId(null); setAiLoading(true);
+        try {
+          const currentNodes = nodesRef.current; const node = currentNodes.find(n => n.id === nodeId);
+          const prompt = `以下のマインドマップの経路から、最後にある「${node.text}」から派生する、具体的で斬新なアイデアを3つ提案してください。\n\n経路: ${getContextPath(nodeId, currentNodes)}\n\n出力は以下のJSON配列形式のみとしてください。\n["アイデア1", "アイデア2", "アイデア3"]`;
+          const res = await callAI(prompt, "あなたは優秀なブレストパートナーです。", true, apiKey, modelName);
+          const suggestions = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+          const children = currentNodes.filter(n => n.parentId === nodeId);
+          const maxY = children.length > 0 ? Math.max(...children.map(c => c.y)) : node.y - 80;
+          setSuggestedNodes(prev => [...prev, ...suggestions.map((text, idx) => ({ id: `sug-${Math.random().toString(36).substring(2, 9)}`, text, x: node.x + 220, y: maxY + 100 * (idx + 1), parentId: nodeId, isSuggested: true }))]);
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const commitSuggestion = (sugNode) => {
+        const newNode = { ...sugNode, id: generateId() }; delete newNode.isSuggested;
+        setNodesWithHistory(prev => applyAutoLayout([...prev, newNode])); 
+        setSuggestedNodes(prev => prev.filter(n => n.id !== sugNode.id)); setSelectedNodeId(newNode.id);
+      };
+
+      const generateQuestions = async (nodeId) => {
+        setNodeAIMenuId(null); setAiLoading(true);
+        try {
+          const node = nodesRef.current.find(n => n.id === nodeId);
+          const res = await callAI(`「${node.text}」に対する鋭い質問や別視点のツッコミを2つ提案してください。\n出力JSON:\n["質問1", "質問2"]`, "あなたはクリティカルシンキングに優れたコンサルタントです。", true, apiKey, modelName);
+          const questions = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+          setNodesWithHistory(prev => applyAutoLayout([...prev, ...questions.map((text) => ({ id: generateId(), text: `🤔 ${text}`, x: node.x, y: node.y, parentId: nodeId, isCollapsed: false }))]));
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const expandFramework = async (nodeId, frameworkName) => {
+        setNodeAIMenuId(null); setAiLoading(true);
+        try {
+          const node = nodesRef.current.find(n => n.id === nodeId);
+          const res = await callAI(`「${node.text}」を「${frameworkName}」で分析し要素を抽出してください。\n出力JSON:\n["要素1", "要素2", ...]`, "優秀なアナリストです。", true, apiKey, modelName);
+          const elements = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+          setNodesWithHistory(prev => applyAutoLayout([...prev, ...elements.map((text) => ({ id: generateId(), text: text, x: node.x, y: node.y, parentId: nodeId, isCollapsed: false }))]));
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const generateEmoji = async (nodeId) => {
+        setNodeAIMenuId(null); setAiLoading(true);
+        try {
+          const node = nodesRef.current.find(n => n.id === nodeId); const cleanText = node.text.replace(/^[\p{Emoji}\s]+/gu, ''); 
+          const emoji = await callAI(`「${cleanText}」を表す絵文字を1つだけ出力してください。`, "絵文字の専門家です。", false, apiKey, modelName);
+          setNodesWithHistory(prev => applyAutoLayout(prev.map(n => n.id === nodeId ? { ...n, text: `${emoji.trim()} ${cleanText}` } : n)));
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const generateDocument = async () => {
+        setShowAIPanel(false); setAiLoading(true);
+        try {
+          const res = await callAI(`以下のマインドマップを整理し、Markdown形式のレポートを作成してください。\n\n${buildMapText(visibleNodes)}`, "優秀な編集者です。", false, apiKey, modelName);
+          setAiModal({ isOpen: true, title: '🧠 脳内マップの文章化', content: res, isMarkdown: true });
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const generateToDo = async () => {
+        setShowAIPanel(false); setAiLoading(true);
+        try {
+          const res = await callAI(`以下のマップから具体的なアクションプランを抽出し、Markdownのチェックリスト形式（- [ ] タスク内容）で出力してください。\n\n${buildMapText(visibleNodes)}`, "優秀なPMです。", false, apiKey, modelName);
+          setAiModal({ isOpen: true, title: '✅ アクションプラン抽出', content: res, isMarkdown: true });
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const detectAnomalies = async () => {
+        setShowAIPanel(false); setAiLoading(true);
+        try {
+          const res = await callAI(`以下の構造を分析し、アイデアの重複や矛盾がないか指摘してください。\n\n${buildMapText(visibleNodes)}`, "鋭い分析官です。", false, apiKey, modelName);
+          setAiModal({ isOpen: true, title: '🔍 重複・矛盾の分析レポート', content: res, isMarkdown: true });
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const clusterNodes = async () => {
+        setShowAIPanel(false); setAiLoading(true);
+        try {
+          const currentNodes = nodesRef.current; const isolatedNodes = currentNodes.filter(n => !n.parentId && currentNodes.filter(c => c.parentId === n.id).length === 0 && n.id !== 'root');
+          if (isolatedNodes.length < 2) { setErrorMessage("独立したノードが少なすぎます。（2つ以上必要）"); setAiLoading(false); return; }
+
+          const res = await callAI(`以下のアイテム群をクラスタリングしてください。\n出力JSON:\n[{"categoryName": "グループ名", "nodeIds": ["id1", ...]}]\n\nアイテム:\n${JSON.stringify(isolatedNodes.map(n => ({ id: n.id, text: n.text })))}`, "情報整理のプロです。", true, apiKey, modelName);
+          const clusters = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+
+          let newNodesList = [...currentNodes];
+          clusters.forEach((cluster) => {
+            if (cluster.nodeIds && cluster.nodeIds.length > 0) {
+              const targetNodes = isolatedNodes.filter(n => cluster.nodeIds.includes(n.id)); if(targetNodes.length === 0) return;
+              const newParentId = generateId();
+              newNodesList.push({ id: newParentId, text: `📁 ${cluster.categoryName}`, x: targetNodes[0].x, y: targetNodes[0].y, parentId: null, isCollapsed: false });
+              targetNodes.forEach((n) => { const nodeIndex = newNodesList.findIndex(x => x.id === n.id); if (nodeIndex !== -1) newNodesList[nodeIndex] = { ...newNodesList[nodeIndex], parentId: newParentId }; });
+            }
+          });
+          setNodesWithHistory(applyAutoLayout(newNodesList)); setErrorMessage("クラスタリングを完了しました。");
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      const generateFromText = async () => {
+        if (!inputText.trim()) return; setTextInputModal(false); setAiLoading(true);
+        try {
+          const res = await callAI(`以下のテキストを解析し階層構造を抽出してください。\n出力JSON:\n[{ "id": "英数字", "text": "テキスト", "parentId": "親id(ルートはnull)" }]\n\nテキスト:\n${inputText}`, "情報を構造化する天才です。", true, apiKey, modelName);
+          const parsedNodes = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+
+          const idMap = {}; parsedNodes.forEach(n => { const newId = generateId(); idMap[n.id] = newId; n.id = newId; n.isCollapsed = false; });
+          parsedNodes.forEach(n => { if (n.parentId) n.parentId = idMap[n.parentId]; });
+
+          setNodesWithHistory(prev => applyAutoLayout([...prev, ...parsedNodes])); setInputText("");
+        } catch (e) { handleAIError(e); } setAiLoading(false);
+      };
+
+      // ★追加: 画像からマップを生成する機能
+      const generateFromImage = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setShowAIPanel(false);
+        setAiLoading(true);
+        
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64data = reader.result.split(',')[1];
+          const mimeType = file.type;
+          try {
+            const res = await callAIImage(base64data, mimeType, apiKey);
+            const parsedNodes = JSON.parse(res.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim());
+
+            const idMap = {}; parsedNodes.forEach(n => { const newId = generateId(); idMap[n.id] = newId; n.id = newId; n.isCollapsed = false; });
+            parsedNodes.forEach(n => { if (n.parentId) n.parentId = idMap[n.parentId]; });
+
+            setNodesWithHistory(prev => applyAutoLayout([...prev, ...parsedNodes])); 
+            setErrorMessage("画像からマップを生成しました！");
+          } catch (error) {
+            handleAIError(error);
+          } finally {
+            setAiLoading(false);
+          }
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      };
+
+      // --- ノード操作 ---
+      const addChild = useCallback((parentId) => {
+        setNodesWithHistory(prev => {
+          const parent = prev.find(n => n.id === parentId); if (!parent) return prev;
+          const newNode = { id: generateId(), text: '', x: parent.x, y: parent.y, parentId: parentId, isCollapsed: false };
+          const nextNodes = prev.map(n => n.id === parentId ? { ...n, isCollapsed: false } : n);
+          nextNodes.push(newNode);
+          setSelectedNodeId(newNode.id); setEditingNodeId(newNode.id); 
+          return applyAutoLayout(nextNodes);
+        });
+      }, [setNodesWithHistory, applyAutoLayout]);
+
+      const addSibling = useCallback((nodeId) => {
+        setNodesWithHistory(prev => {
+          const node = prev.find(n => n.id === nodeId); if (!node || !node.parentId) return prev; 
+          const newNode = { id: generateId(), text: '', x: node.x, y: node.y, parentId: node.parentId, isCollapsed: false };
+          const nextNodes = [...prev, newNode];
+          setSelectedNodeId(newNode.id); setEditingNodeId(newNode.id); 
+          return applyAutoLayout(nextNodes);
+        });
+      }, [setNodesWithHistory, applyAutoLayout]);
+
+      const deleteNode = useCallback((id) => {
+        setNodesWithHistory(prev => {
+          const idsToDelete = new Set([id]); let changed = true;
+          while (changed) { changed = false; for (const node of prev) { if (idsToDelete.has(node.parentId) && !idsToDelete.has(node.id)) { idsToDelete.add(node.id); changed = true; } } }
+          const nextNodes = prev.filter(n => !idsToDelete.has(n.id));
+          return applyAutoLayout(nextNodes);
+        });
+        setSuggestedNodes(prev => prev.filter(n => n.parentId !== id)); 
+        setFocusSelection(prev => { const next = new Set(prev); next.delete(id); return next; });
+        setSelectedNodeId(null);
+      }, [setNodesWithHistory, applyAutoLayout]);
+
+      const unlinkNode = useCallback((id) => setNodesWithHistory(prev => applyAutoLayout(prev.map(n => n.id === id ? { ...n, parentId: null } : n))), [setNodesWithHistory, applyAutoLayout]);
+      
+      const updateNodeText = useCallback((id, text) => {
+        setNodes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
+      }, []);
+
+      // --- キーボード操作 ---
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (editingNodeId || textInputModal || exportTextModal || aiModal.isOpen || mapToDelete || settingsModal) return; 
+          if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+          if (e.key.toLowerCase() === 'y' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); redo(); return; }
+          if (!selectedNodeId) return;
+          
+          // ★追加: Cmd+Up / Cmd+Down でもノードの順番を入れ替え可能に
+          if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); moveNode(selectedNodeId, 'up'); }
+          else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); moveNode(selectedNodeId, 'down'); }
+          
+          else if (e.key === 'Tab') { e.preventDefault(); addChild(selectedNodeId); } 
+          else if (e.key === 'Enter') { e.preventDefault(); const selected = nodes.find(n => n.id === selectedNodeId); if (selected && selected.parentId) addSibling(selectedNodeId); else addChild(selectedNodeId); } 
+          else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); deleteNode(selectedNodeId); }
+        };
+        window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [selectedNodeId, editingNodeId, textInputModal, exportTextModal, aiModal.isOpen, mapToDelete, settingsModal, nodes, addChild, addSibling, deleteNode, moveNode, undo, redo]);
+
+      // --- マウス・タッチ操作 ---
+      const handleDoubleClickCanvas = (e) => {
+        if (e.target.closest('.mindmap-node') || e.target.closest('.ui-element')) return;
+        const rect = containerRef.current.getBoundingClientRect(); const x = (e.clientX - rect.left - pan.x) / zoom; const y = (e.clientY - rect.top - pan.y) / zoom;
+        const newNode = { id: generateId(), text: '', x, y, parentId: null, isCollapsed: false };
+        setNodesWithHistory(prev => [...prev, newNode]); setSelectedNodeId(newNode.id); setEditingNodeId(newNode.id);
+      };
+
+      const handlePointerDown = (e) => {
+        if (e.target.closest('.mindmap-node')) return; 
+        if (e.target.closest('.ui-element')) { if (!e.target.closest('.ai-menu-container')) setNodeAIMenuId(null); return; }
+        isPanning.current = true; lastPanPos.current = { x: e.clientX, y: e.clientY };
+        setSelectedNodeId(null); 
+        if (editingNodeId) { handleFinishEdit(); }
+        setNodeAIMenuId(null); setShowAIPanel(false); setIsSidebarOpen(false);
+        setIsMenuOpen(false); // ★追加: キャンバスをタッチしたらメニューを閉じる
+        dragInfo.current.isDragging = false; linkInfo.current.isLinking = false; setLinkState({ isLinking: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+      };
+
+      const handlePointerMove = (e) => {
+        if (isPanning.current) {
+          const dx = e.clientX - lastPanPos.current.x; const dy = e.clientY - lastPanPos.current.y;
+          setPan(p => ({ x: p.x + dx, y: p.y + dy })); lastPanPos.current = { x: e.clientX, y: e.clientY };
+        } 
+        else if (dragInfo.current.isDragging) {
+          const info = dragInfo.current; const draggedNodeId = info.nodeId;
+          const dx = (e.clientX - info.startX) / zoom; const dy = (e.clientY - info.startY) / zoom;
+          setNodes(prev => prev.map(n => { if (info.initialPositions.has(n.id)) return { ...n, x: info.initialPositions.get(n.id).x + dx, y: info.initialPositions.get(n.id).y + dy }; return n; }));
+
+          let targetId = null; const currentNodes = nodesRef.current;
+          const newX = info.initialPositions.get(draggedNodeId).x + dx; const newY = info.initialPositions.get(draggedNodeId).y + dy;
+          for (const node of currentNodes) {
+            if (node.id === draggedNodeId || info.initialPositions.has(node.id) || isDescendant(draggedNodeId, node.id, currentNodes)) continue; 
+            if (Math.abs(node.x - newX) < 220 && Math.abs(node.y - newY) < 120) { targetId = node.id; break; }
+          }
+          setDropTargetId(targetId); dropTargetIdRef.current = targetId;
+        }
+        else if (linkInfo.current.isLinking) {
+          const currentX = (e.clientX - pan.x) / zoom; const currentY = (e.clientY - pan.y) / zoom;
+          linkInfo.current.currentX = currentX; linkInfo.current.currentY = currentY; setLinkState({ ...linkInfo.current });
+
+          let targetId = null; const currentNodes = nodesRef.current; const sourceId = linkInfo.current.sourceId;
+          for (const node of currentNodes) {
+            if (node.id === sourceId || isDescendant(node.id, sourceId, currentNodes)) continue; 
+            if (Math.abs(node.x - currentX) < 150 && Math.abs(node.y - currentY) < 80) { targetId = node.id; break; }
+          }
+          setDropTargetId(targetId); dropTargetIdRef.current = targetId;
+        }
+      };
+
+      const handlePointerUp = useCallback(() => {
+        if (dragInfo.current.isDragging) {
+          const { nodeId: draggedNodeId, initialNodesForHistory: initialNodes } = dragInfo.current; const targetNodeId = dropTargetIdRef.current;
+          setNodes(prev => {
+            let next = prev; if (targetNodeId && draggedNodeId) next = prev.map(n => n.id === draggedNodeId ? { ...n, parentId: targetNodeId } : n);
+            if (targetNodeId && draggedNodeId) { next = applyAutoLayout(next); }
+            if (initialNodes && JSON.stringify(initialNodes) !== JSON.stringify(next)) { setPast(p => [...p, initialNodes]); setFuture([]); } return next;
+          });
+          dragInfo.current.isDragging = false; dragInfo.current.nodeId = null; dragInfo.current.initialPositions.clear(); dragInfo.current.initialNodesForHistory = null;
+        } 
+        else if (linkInfo.current.isLinking) {
+          const { sourceId, initialNodesForHistory: initialNodes } = linkInfo.current; const targetId = dropTargetIdRef.current;
+          if (targetId && sourceId) {
+            setNodes(prev => {
+              const next = applyAutoLayout(prev.map(n => n.id === targetId ? { ...n, parentId: sourceId } : n));
+              if (initialNodes && JSON.stringify(initialNodes) !== JSON.stringify(next)) { setPast(p => [...p, initialNodes]); setFuture([]); } return next;
+            });
+          }
+          linkInfo.current.isLinking = false; linkInfo.current.sourceId = null; linkInfo.current.initialNodesForHistory = null; setLinkState({ isLinking: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+        }
+        isPanning.current = false; setDropTargetId(null); dropTargetIdRef.current = null; lastTouchDistance.current = null;
+      }, [applyAutoLayout]);
+
+      const handleWheel = (e) => {
+        if (e.target.closest('.ui-element') || aiModal.isOpen || textInputModal || exportTextModal || mapToDelete || settingsModal) return;
+        const mouseX = (e.clientX - pan.x) / zoom; const mouseY = (e.clientY - pan.y) / zoom;
+        const zoomDelta = e.deltaY * -0.001; const newZoom = Math.min(Math.max(0.1, zoom + zoomDelta), 3);
+        setZoom(newZoom); setPan({ x: e.clientX - mouseX * newZoom, y: e.clientY - mouseY * newZoom });
+      };
+
+      // --- ローカル用ファイル書き出し ---
+      const exportToHTML = () => {
+        const rootNode = nodes.find(n => !n.parentId) || nodes[0];
+        const fileName = `${rootNode.text || 'mindmap'}.html`;
+        const jsonData = JSON.stringify(nodes);
+        const htmlContent = `<!DOCTYPE html>\n<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${rootNode.text}</title>\n<style>body{margin:0;background:#f8fafc;font-family:sans-serif;overflow:auto}.node{position:absolute;transform:translate(-50%,-50%);min-width:120px;max-width:250px;padding:12px;text-align:center;white-space:pre-wrap;word-break:break-word;font-size:14px;font-weight:500;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1)}.node-root{background:#4f46e5;color:white;border-radius:12px}.node-child{background:white;color:#1e293b;border:2px solid #e2e8f0;border-radius:8px}svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible}path{stroke:#cbd5e1;stroke-width:3;fill:none;stroke-linecap:round}</style></head><body>\n<script id="mindmap-data" type="application/json">${jsonData}<\/script><div id="app"></div>\n<script>\nconst data = JSON.parse(document.getElementById('mindmap-data').textContent);\nlet minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;\ndata.forEach(n=>{if(n.x<minX)minX=n.x;if(n.x>maxX)maxX=n.x;if(n.y<minY)minY=n.y;if(n.y>maxY)maxY=n.y;});\nconst pad=200,w=Math.max(window.innerWidth,maxX-minX+pad*2),h=Math.max(window.innerHeight,maxY-minY+pad*2),ox=-minX+pad,oy=-minY+pad;\nconst app=document.getElementById('app');app.style.width=w+'px';app.style.height=h+'px';\nconst svg=document.createElementNS('http://www.w3.org/2000/svg','svg');\ndata.forEach(node=>{if(!node.parentId)return;const parent=data.find(n=>n.id===node.parentId);if(!parent)return;\nconst path=document.createElementNS('http://www.w3.org/2000/svg','path');\npath.setAttribute('d',\`M \${parent.x+ox} \${parent.y+oy} C \${parent.x+ox+(node.x-parent.x)/2} \${parent.y+oy}, \${parent.x+ox+(node.x-parent.x)/2} \${node.y+oy}, \${node.x+ox} \${node.y+oy}\`);svg.appendChild(path);});app.appendChild(svg);\ndata.forEach(node=>{const div=document.createElement('div');div.className='node '+(node.parentId?'node-child':'node-root');\ndiv.style.left=(node.x+ox)+'px';div.style.top=(node.y+oy)+'px';div.textContent=node.text;app.appendChild(div);});\nconst root=data.find(n=>!n.parentId);if(root)window.scrollTo({left:root.x+ox-window.innerWidth/2,top:root.y+oy-window.innerHeight/2});\n<\/script></body></html>`;
+        const blob = new Blob([htmlContent], { type: 'text/html' }); const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+      };
+
+      const importFromHTML = (e) => {
+        const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const doc = new DOMParser().parseFromString(event.target.result, 'text/html'); const dataScript = doc.getElementById('mindmap-data');
+            if (dataScript) {
+              const parsedNodes = JSON.parse(dataScript.textContent);
+              if (Array.isArray(parsedNodes) && parsedNodes.length > 0) {
+                skipNextSaveRef.current = false; 
+                setNodes(parsedNodes); setPast([]); setFuture([]); setSuggestedNodes([]); setSelectedNodeId(null); clearFocus(); resetView(); setErrorMessage('データを読み込みました。');
+              } else setErrorMessage('データが空か不正な形式です。');
+            } else setErrorMessage('有効なデータが見つかりませんでした。');
+          } catch (error) { setErrorMessage('ファイルの読み込みに失敗しました。'); }
+          e.target.value = ''; 
+        };
+        reader.readAsText(file);
+      };
+
+      useEffect(() => { if (errorMessage) { const timer = setTimeout(() => setErrorMessage(null), 3000); return () => clearTimeout(timer); } }, [errorMessage]);
+
+      // --- 描画ロジック ---
+      const renderEdges = (nodeList, isDashed = false, offsetX = 0, offsetY = 0) => {
+        return nodeList.map(node => {
+          if (!node.parentId) return null; const parent = nodes.find(n => n.id === node.parentId) || suggestedNodes.find(n => n.id === node.parentId); if (!parent) return null;
+          const d = `M ${parent.x - offsetX} ${parent.y - offsetY} C ${parent.x - offsetX + (node.x - parent.x) / 2} ${parent.y - offsetY}, ${parent.x - offsetX + (node.x - parent.x) / 2} ${node.y - offsetY}, ${node.x - offsetX} ${node.y - offsetY}`;
+          return <path key={`edge-${node.id}`} d={d} stroke={isDashed ? "#818cf8" : "#cbd5e1"} strokeWidth={3 / (offsetX===0 ? zoom : 1)} fill="none" strokeLinecap="round" className={isDashed ? "stroke-dasharray-4 animate-pulse" : "transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"} style={isDashed ? { strokeDasharray: '6,6' } : {}} />;
+        });
+      };
+
+      return (
+        <div 
+          className="relative w-full h-screen overflow-hidden bg-slate-50 select-none font-sans touch-none"
+          ref={containerRef} onDoubleClick={handleDoubleClickCanvas} onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onWheel={handleWheel}
+          style={{ backgroundImage: `radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px)`, backgroundSize: `${24 * zoom}px ${24 * zoom}px`, backgroundPosition: `${pan.x}px ${pan.y}px` }}
+        >
+          {/* パン・ズーム制御用キャンバス */}
+          <div className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+            
+            <svg className="absolute top-0 left-0 overflow-visible z-0 pointer-events-none">
+              {renderEdges(visibleNodes)} {renderEdges(suggestedNodes, true)}
+              {dragInfo.current.isDragging && dropTargetId && (() => {
+                const draggedNode = nodes.find(n => n.id === dragInfo.current.nodeId); const targetNode = nodes.find(n => n.id === dropTargetId);
+                if (draggedNode && targetNode) {
+                  const d = `M ${targetNode.x} ${targetNode.y} C ${targetNode.x + (draggedNode.x - targetNode.x) / 2} ${targetNode.y}, ${targetNode.x + (draggedNode.x - targetNode.x) / 2} ${draggedNode.y}, ${draggedNode.x} ${draggedNode.y}`;
+                  return <path d={d} stroke="#fbbf24" strokeWidth={4 / zoom} strokeDasharray="8,8" fill="none" strokeLinecap="round" className="animate-pulse" />;
+                } return null;
+              })()}
+              {linkState.isLinking && (() => {
+                const { startX, startY, currentX, currentY } = linkState; const targetNode = nodes.find(n => n.id === dropTargetId);
+                const endX = targetNode ? targetNode.x : currentX; const endY = targetNode ? targetNode.y : currentY;
+                const d = `M ${startX} ${startY} C ${startX + (endX - startX) / 2} ${startY}, ${startX + (endX - startX) / 2} ${endY}, ${endX} ${endY}`;
+                return <path d={d} stroke="#6366f1" strokeWidth={4 / zoom} strokeDasharray="8,8" fill="none" strokeLinecap="round" className="animate-pulse" />;
+              })()}
+            </svg>
+
+            {suggestedNodes.map(node => (
+              <div key={node.id} className="absolute pointer-events-auto z-10 flex flex-col items-center justify-center bg-indigo-50/80 text-indigo-800 border-2 border-dashed border-indigo-300 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-indigo-100 transition-all hover:scale-105 shadow-sm"
+                style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)', minWidth: '120px', maxWidth: '250px' }}
+                onPointerDown={(e) => { e.stopPropagation(); commitSuggestion(node); }}
+              >
+                <div className="absolute -top-3 -right-3 bg-indigo-100 text-indigo-600 rounded-full p-1 shadow-sm"><Sparkles size={14}/></div>
+                <div className="w-full p-3 text-center whitespace-pre-wrap break-words text-sm font-medium">{node.text}</div>
+              </div>
+            ))}
+
+            {visibleNodes.map(node => {
+              const isSelected = selectedNodeId === node.id; const isEditing = editingNodeId === node.id;
+              const isRoot = !node.parentId; const isDropTarget = dropTargetId === node.id;
+              const isDragged = dragInfo.current.nodeId === node.id; const isLinkingSrc = linkInfo.current.sourceId === node.id;
+              const showAIMenu = nodeAIMenuId === node.id;
+              const isSelectedForFocus = focusSelection.has(node.id);
+              const isRecordingThisNode = recordingNodeId === node.id;
+
+              const descendantIds = getDescendantIds(node.id, nodesRef.current);
+              const hasChildren = descendantIds.length > 0;
+
+              // ★追加: 階層に基づいたカラーを取得
+              const nodeColors = getNodeColors(node.depth || 0, isRoot, isSelected);
+
+              return (
+                <div key={node.id}
+                  className={`mindmap-node absolute pointer-events-auto z-20 flex flex-col items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                    ${nodeColors}
+                    ${isSelectedForFocus && !isFocusActive ? 'ring-4 ring-amber-200 border-amber-400' : ''}
+                    ${isFocusActive && isSelectedForFocus ? 'ring-4 ring-amber-400 border-amber-500' : ''}
+                    ${isDropTarget ? 'ring-4 ring-amber-400 bg-amber-50 scale-105 shadow-xl' : ''}
+                    ${isDragged || isLinkingSrc ? 'opacity-90 shadow-2xl scale-105 z-50' : ''}
+                  `}
+                  style={{
+                    left: node.x, top: node.y, transform: 'translate(-50%, -50%)', 
+                    width: node.w ? `${node.w}px` : undefined, // ★動的に計算された幅を適用
+                    minWidth: '160px', maxWidth: '340px', // ★スマホに収まる上限に変更
+                    borderRadius: isRoot ? '12px' : '8px', borderWidth: isRoot ? '0' : '2px',
+                    boxShadow: isSelected && !isDragged ? '0 10px 25px -5px rgba(0,0,0,0.1)' : '0 4px 6px -1px rgba(0,0,0,0.1)',
+                    zIndex: isSelected || isDropTarget || isDragged || isSelectedForFocus ? 30 : 20
+                  }}
+                  onPointerDown={(e) => { e.stopPropagation(); setSelectedNodeId(node.id); setNodeAIMenuId(null); if(editingNodeId && editingNodeId !== node.id) handleFinishEdit(); }}
+                  onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
+                >
+                  {isEditing ? (
+                    <textarea 
+                      value={node.text} 
+                      onChange={(e) => { 
+                        e.target.style.height = 'inherit'; 
+                        e.target.style.height = `${e.target.scrollHeight}px`; 
+                        updateNodeText(node.id, e.target.value); 
+                      }} 
+                      onBlur={handleFinishEdit}
+                      onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFinishEdit(); } }}
+                      ref={(el) => { if (el) { el.style.height = 'inherit'; el.style.height = `${el.scrollHeight}px`; } }}
+                      autoFocus 
+                      className={`w-full bg-transparent outline-none resize-none text-center p-3 text-sm sm:text-base font-medium overflow-hidden ${isRoot?'text-white':''}`} 
+                      style={{ minHeight: '60px' }} 
+                    />
+                  ) : (
+                    <div className="w-full p-4 text-center whitespace-pre-wrap break-words text-sm sm:text-base font-medium select-text cursor-text">{node.text || <span className="text-slate-400 opacity-50">空のノード</span>}</div>
+                  )}
+
+                  {hasChildren && !isEditing && !isDragged && (
+                    <div 
+                      className={`absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-6 bg-white border border-slate-300 rounded-full flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-400 z-50 cursor-pointer shadow-sm transition-colors touch-none ${node.isCollapsed ? 'border-indigo-300 ring-2 ring-indigo-100' : ''}`}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setNodesWithHistory(prev => applyAutoLayout(prev.map(n => n.id === node.id ? { ...n, isCollapsed: !n.isCollapsed } : n)));
+                      }}
+                      title={node.isCollapsed ? "展開する" : "格納する"}
+                    >
+                      {node.isCollapsed ? <span className="text-[10px] font-bold text-indigo-600">+{descendantIds.length}</span> : <Minus size={10} />}
+                    </div>
+                  )}
+
+                  {isSelected && !isEditing && (
+                    <div className="absolute -top-4 -right-4 p-2.5 bg-white rounded-full shadow-md border border-slate-200 cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-600 touch-none pointer-events-auto"
+                      style={{ transform: `scale(${1/Math.max(zoom, 0.5)})`, transformOrigin: 'center center' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation(); if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+                        const currentNodes = nodesRef.current; const descendantIds = getDescendantIds(node.id, currentNodes);
+                        const movingNodeIds = new Set([node.id, ...descendantIds]); const initialPositions = new Map();
+                        currentNodes.forEach(n => { if (movingNodeIds.has(n.id)) initialPositions.set(n.id, { x: n.x, y: n.y }); });
+                        dragInfo.current = { isDragging: true, nodeId: node.id, startX: e.clientX, startY: e.clientY, initialPositions, initialNodesForHistory: currentNodes };
+                      }}
+                      onPointerUp={(e) => { e.stopPropagation(); if (e.currentTarget.releasePointerCapture) e.currentTarget.releasePointerCapture(e.pointerId); handlePointerUp(); }}
+                    ><GripHorizontal size={24} /></div>
+                  )}
+
+                  {isSelected && !isEditing && !isDragged && (
+                    <div className="absolute top-1/2 -right-6 p-2 bg-indigo-500 text-white rounded-full shadow-md cursor-crosshair touch-none pointer-events-auto hover:bg-indigo-600 transition-colors"
+                      style={{ transform: `translateY(-50%) scale(${1/Math.max(zoom, 0.5)})`, zIndex: 40 }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation(); if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+                        linkInfo.current = { isLinking: true, sourceId: node.id, startX: node.x, startY: node.y, currentX: (e.clientX - pan.x) / zoom, currentY: (e.clientY - pan.y) / zoom, initialNodesForHistory: nodesRef.current };
+                        setLinkState({ ...linkInfo.current });
+                      }}
+                      onPointerUp={(e) => { e.stopPropagation(); if (e.currentTarget.releasePointerCapture) e.currentTarget.releasePointerCapture(e.pointerId); handlePointerUp(); }}
+                      title="ドラッグして接続"
+                    ><Link2 size={16} /></div>
+                  )}
+
+                  {isSelected && !isEditing && !isDragged && (
+                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 flex gap-1 sm:gap-2 bg-white p-1.5 rounded-full shadow-lg border border-slate-200 pointer-events-auto w-max"
+                      style={{ transform: `translateX(-50%) scale(${1/Math.max(zoom, 0.5)})`, transformOrigin: 'top center' }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <button type="button" onClick={(e) => { e.stopPropagation(); toggleFocusSelection(node.id); }} className={`p-2.5 sm:p-2 hover:bg-slate-100 rounded-full ${isSelectedForFocus ? 'text-amber-500' : 'text-slate-500'}`} title="フォーカス対象にストック"><TargetIcon size={20} /></button>
+                      <div className="w-px bg-slate-200 mx-0.5"></div>
+
+                      <button type="button" onClick={(e) => { e.stopPropagation(); isRecordingThisNode ? stopRecording() : startRecording(node.id); }} 
+                        className={`p-2.5 sm:p-2 rounded-full transition-colors ${isRecordingThisNode ? 'bg-rose-100 text-rose-600 animate-pulse' : 'hover:bg-slate-100 text-slate-500'}`} 
+                        title={isRecordingThisNode ? "録音を停止して文字起こし" : "音声入力（AI文字起こし）"}>
+                        {isRecordingThisNode ? <StopCircleIcon size={20} /> : <MicIcon size={20} />}
+                      </button>
+                      <div className="w-px bg-slate-200 mx-0.5"></div>
+
+                      <div className="relative ai-menu-container">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setNodeAIMenuId(showAIMenu ? null : node.id); }} 
+                          className={`p-2.5 sm:p-2 rounded-full transition-colors ${showAIMenu ? 'bg-purple-100 text-purple-700' : 'hover:bg-slate-100 text-purple-600'}`} title="AI機能">
+                          <Wand2 size={20} />
+                        </button>
+                        {showAIMenu && (
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 bg-white rounded-xl shadow-xl border border-slate-200 p-2 flex flex-col gap-1 w-48 z-50 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="text-[10px] text-slate-400 font-bold px-2 py-1 uppercase tracking-wider">AI アシスタント</div>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateSuggestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><Lightbulb size={16} className="text-amber-500"/> 次のアイデアを提案</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateQuestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><HelpCircle size={16} className="text-rose-500"/> 鋭いツッコミ</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, '5W1H');}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> 5W1H で展開</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, 'メリット・デメリット');}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> メリット・デメリット</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateEmoji(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><SmilePlus size={16} className="text-emerald-500"/> アイコンを自動付与</button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-px bg-slate-200 mx-0.5"></div>
+                      
+                      {/* ★追加: 順番入れ替え（同格のノードが2つ以上ある場合のみ操作可能） */}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'up'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-500 hover:text-indigo-600" title="順番を上に移動"><ArrowUp size={20} /></button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'down'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-500 hover:text-indigo-600" title="順番を下に移動"><ArrowDown size={20} /></button>
+                      <div className="w-px bg-slate-200 mx-0.5"></div>
+
+                      <button type="button" onClick={(e) => { e.stopPropagation(); addChild(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-indigo-600" title="子ノードを追加"><Plus size={20} /></button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-emerald-600" title="テキストを編集"><Edit2 size={20} /></button>
+                      {node.parentId && <button type="button" onClick={(e) => { e.stopPropagation(); unlinkNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-amber-600" title="親からのリンクを解除"><Unlink size={20} /></button>}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-rose-600" title="このノードと子孫を削除"><Trash2 size={20} /></button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ========================================== */}
+          {/* ★スナップショット（画像化）専用の非表示領域 */}
+          {/* ========================================== */}
+          {isCapturing && (
+            <div id="snapshot-area" className="absolute z-[-1]" style={{ 
+              top: -9999, left: -9999, 
+              width: captureBox.width, height: captureBox.height, 
+              backgroundColor: '#f8fafc', 
+              backgroundImage: `radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px)`, 
+              backgroundSize: `24px 24px`,
+              backgroundPosition: `${-captureBox.minX}px ${-captureBox.minY}px`
+            }}>
+              <svg className="absolute top-0 left-0 overflow-visible z-0 pointer-events-none" width="100%" height="100%">
+                {renderEdges(visibleNodes, false, captureBox.minX, captureBox.minY)}
+              </svg>
+              {visibleNodes.map(node => {
+                const isRoot = !node.parentId;
+                // ★追加: 画像保存時もカラーを適用
+                const nodeColors = getNodeColors(node.depth || 0, isRoot, false);
+                return (
+                  <div key={`snap-${node.id}`}
+                    className={`absolute flex flex-col items-center justify-center ${nodeColors}`}
+                    style={{
+                      left: node.x - captureBox.minX, top: node.y - captureBox.minY, 
+                      transform: 'translate(-50%, -50%)', 
+                      width: node.w ? `${node.w}px` : undefined, // ★動的に計算された幅を適用
+                      minWidth: '160px', maxWidth: '340px', // ★表示用と合わせる
+                      borderRadius: isRoot ? '12px' : '8px', borderWidth: isRoot ? '0' : '2px',
+                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                      zIndex: 20
+                    }}
+                  >
+                    <div className="w-full p-4 text-center whitespace-pre-wrap break-words text-base font-medium">{node.text || '空のノード'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* --- UI レイヤー --- */}
+
+          {/* クラウド同期ステータス */}
+          {syncStatus && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full shadow-sm border border-slate-200 text-xs font-bold text-slate-500 z-30 pointer-events-none flex items-center gap-2">
+              {syncStatus === '同期中...' || syncStatus === '新規作成中...' || syncStatus === '読み込み中...' || syncStatus === '削除中...' ? <Loader2 size={12} className="animate-spin text-indigo-500"/> : (syncStatus === 'エラー' ? <X size={12} className="text-rose-500"/> : <ServerIcon size={12} className="text-indigo-500"/>)}
+              {syncStatus}
+            </div>
+          )}
+
+          {/* フォーカス選択中のバナー */}
+          {!isFocusActive && focusSelection.size > 0 && (
+            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-50/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 text-sm font-bold text-amber-700 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+              <TargetIcon size={16} className="text-amber-500" /> {focusSelection.size}つのノードを選択中
+              <div className="flex gap-2 ml-2">
+                <button onClick={() => setIsFocusActive(true)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-full text-xs transition-colors shadow-sm">フォーカス実行</button>
+                <button onClick={() => setFocusSelection(new Set())} className="bg-white hover:bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-xs border border-slate-200 transition-colors">キャンセル</button>
+              </div>
+            </div>
+          )}
+
+          {/* フォーカスモード起動中のバナー */}
+          {isFocusActive && (
+            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-100/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 text-sm font-bold text-amber-800 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+              <TargetIcon size={16} /> フォーカスモード起動中
+              <button onClick={clearFocus} className="bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 px-4 py-1.5 rounded-full text-xs transition-colors ml-2 shadow-sm">解除する</button>
+            </div>
+          )}
+
+          {/* 音声録音中のオーバーレイ */}
+          {recordingNodeId && (
+            <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
+              <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-slate-200 animate-in zoom-in-95">
+                <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center animate-pulse">
+                  <MicIcon size={32} />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-bold text-slate-800 text-lg mb-1">音声を録音中...</h3>
+                  <p className="text-sm text-slate-500">話し終わったら停止ボタンを押してください</p>
+                </div>
+                <button onClick={stopRecording} className="mt-2 px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2">
+                  <StopCircleIcon size={20} /> 録音を終了
+                </button>
+              </div>
+            </div>
+          )}
+
+          {aiLoading && !recordingNodeId && (
+            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
+              <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200">
+                <Loader2 className="text-indigo-600" size={24} />
+                <span className="text-slate-700 font-medium">AIが思考を巡らせています...</span>
+              </div>
+            </div>
+          )}
+          {isCapturing && (
+            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
+              <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200">
+                <Loader2 className="text-indigo-600" size={24} />
+                <span className="text-slate-700 font-medium">画像を生成しています...</span>
+              </div>
+            </div>
+          )}
+
+          {/* サイドバー（マイマップ一覧） */}
+          {isSidebarOpen && (
+            <div className="absolute inset-0 z-[200] flex ui-element">
+              <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm pointer-events-auto" onClick={() => setIsSidebarOpen(false)}></div>
+              <div className="relative w-80 max-w-[80%] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left pointer-events-auto z-10">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <h2 className="font-bold text-slate-800 flex items-center gap-2"><MapIcon size={20} className="text-indigo-600"/> マイマップ (GAS)</h2>
+                  <button type="button" onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <div className="p-4">
+                  <button type="button" onClick={handleCreateNewMap} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95">
+                    <Plus size={18}/> 新しいマップを作成
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2">
+                  {maps.map(m => (
+                    <div key={m.id} 
+                      className={`p-3 rounded-xl mb-2 cursor-pointer transition-colors group flex justify-between items-center ${currentMapIdRef.current === m.id ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-slate-50 border border-transparent'}`}
+                      onClick={(e) => handleLoadMap(m.id, e)}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="font-medium text-slate-800 truncate text-sm">{m.title}</div>
+                        <div className="text-[10px] text-slate-400 mt-1">{new Date(m.updatedAt).toLocaleString()}</div>
+                      </div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setMapToDelete(m); }} className="p-2 text-slate-300 hover:text-rose-500 opacity-0 sm:opacity-100 sm:group-hover:opacity-100 transition-opacity rounded-lg hover:bg-rose-50">
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+                  ))}
+                  {maps.length === 0 && <div className="text-center text-slate-400 mt-10 text-sm">マップがありません</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* マップの削除モーダル */}
+          {mapToDelete && (
+            <div className="absolute inset-0 z-[210] flex items-center justify-center p-4 pointer-events-auto ui-element">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setMapToDelete(null)}></div>
+              <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="p-6">
+                  <h3 className="font-bold text-slate-800 text-lg mb-2">マップの削除</h3>
+                  <p className="text-sm text-slate-600">「{mapToDelete.title}」をクラウドから削除しますか？この操作は取り消せません。</p>
+                </div>
+                <div className="px-6 py-4 flex justify-end gap-3 bg-slate-50 border-t border-slate-100">
+                  <button type="button" onClick={() => setMapToDelete(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                  <button type="button" onClick={(e) => confirmDeleteMap(mapToDelete.id, e)} className="px-4 py-2 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-lg shadow-sm transition-colors flex items-center gap-2"><Trash2 size={16}/> 削除する</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 左下: AI全体アシスタントパネル */}
+          <div className="ui-element absolute bottom-16 sm:bottom-20 left-4 sm:left-6 z-40 pointer-events-auto flex flex-col items-start gap-2">
+            {showAIPanel && (
+              <div className="bg-white/95 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-slate-200 flex flex-col gap-1 w-56 sm:w-64 animate-in slide-in-from-bottom-4 origin-bottom-left">
+                <div className="text-xs text-slate-500 font-bold px-3 pt-2 pb-1 flex items-center gap-2"><Sparkles size={14} className="text-indigo-500"/> AI アシスタント</div>
+                <button type="button" onClick={generateDocument} className="flex items-center gap-3 p-3 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-xl transition-colors text-sm font-medium text-left"><FileText size={18} className="text-indigo-500"/> 脳内マップを文章化</button>
+                <button type="button" onClick={generateToDo} className="flex items-center gap-3 p-3 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl transition-colors text-sm font-medium text-left"><ListChecks size={18} className="text-emerald-500"/> アクションプラン抽出</button>
+                <button type="button" onClick={detectAnomalies} className="flex items-center gap-3 p-3 hover:bg-amber-50 text-slate-700 hover:text-amber-700 rounded-xl transition-colors text-sm font-medium text-left"><MessageSquareWarning size={18} className="text-amber-500"/> 重複・矛盾のチェック</button>
+                <div className="h-px bg-slate-100 my-1 mx-2"></div>
+                <button type="button" onClick={clusterNodes} className="flex items-center gap-3 p-3 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl transition-colors text-sm font-medium text-left"><Network size={18} className="text-blue-500"/> 独立ノードの自動整理</button>
+                <button type="button" onClick={()=>{setShowAIPanel(false); setTextInputModal(true);}} className="flex items-center gap-3 p-3 hover:bg-purple-50 text-slate-700 hover:text-purple-700 rounded-xl transition-colors text-sm font-medium text-left"><TextSelect size={18} className="text-purple-500"/> 長文から自動生成</button>
+                {/* ★追加: 画像読み込みボタン */}
+                <button type="button" onClick={() => imageInputRef.current?.click()} className="flex items-center gap-3 p-3 hover:bg-orange-50 text-slate-700 hover:text-orange-700 rounded-xl transition-colors text-sm font-medium text-left"><ImageIcon size={18} className="text-orange-500"/> 画像から自動生成</button>
+                <input type="file" ref={imageInputRef} onChange={generateFromImage} accept="image/*" className="hidden" />
+              </div>
+            )}
+            <button type="button" onClick={() => setShowAIPanel(!showAIPanel)} className={`p-3.5 sm:p-4 rounded-2xl shadow-lg flex items-center gap-2 transition-all hover:scale-105 active:scale-95 ${showAIPanel ? 'bg-indigo-600 text-white' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
+              {showAIPanel ? <X size={24} /> : <Sparkles size={24} />}
+              <span className="hidden sm:inline font-bold">AIツール</span>
+            </button>
+          </div>
+
+          {/* 右下: ズームコントロール */}
+          <div className="ui-element absolute bottom-16 sm:bottom-20 right-4 sm:right-6 flex gap-1 sm:gap-2 bg-white/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-lg border border-slate-200 pointer-events-auto">
+            <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><ZoomOut size={24} className="sm:w-5 sm:h-5" /></button>
+            <div className="flex items-center px-1 sm:px-2 text-sm font-medium text-slate-600 min-w-[3rem] justify-center">{Math.round(zoom * 100)}%</div>
+            <button type="button" onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><ZoomIn size={24} className="sm:w-5 sm:h-5" /></button>
+            <div className="w-px h-8 sm:h-6 bg-slate-200 my-auto mx-1"></div>
+            <button type="button" onClick={resetView} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><Maximize size={24} className="sm:w-5 sm:h-5" /></button>
+          </div>
+
+          {/* 左上: サイドバーボタン & ヘルプ */}
+          <div className="ui-element absolute top-4 sm:top-6 left-4 sm:left-6 pointer-events-auto z-40 flex gap-2">
+            <button type="button" onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-2">
+              <MapIcon size={20} /> <span className="hidden sm:inline font-bold text-sm">マイマップ</span>
+            </button>
+            {!showHelp ? (
+              <button type="button" onClick={() => setShowHelp(true)} className="p-3 bg-white/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:bg-slate-50"><Info size={24} /></button>
+            ) : (
+              <div className="bg-white/95 backdrop-blur p-4 sm:p-5 rounded-xl shadow-lg border border-slate-200 flex flex-col gap-3 max-w-[280px] sm:max-w-xs">
+                <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
+                  <div className="flex items-center gap-2"><Info size={20} className="text-indigo-600" /><span>操作ガイド</span></div>
+                  <button type="button" onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
+                </div>
+                <div className="text-xs text-slate-600 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
+                  <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] justify-self-end whitespace-nowrap">W-Tap</span><span>独立ノード作成</span>
+                  <div className="justify-self-end"><GripHorizontal size={14} className="text-slate-500" /></div><span>全体移動・接続</span>
+                  <div className="justify-self-end"><Link2 size={14} className="text-slate-500" /></div><span>線を引き出して接続</span>
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">Tab</kbd><span>子ノードを追加</span>
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">Enter</kbd><span>兄弟ノードを追加</span>
+                  <div className="justify-self-end whitespace-nowrap">
+                    <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono">⌘</kbd>+<kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono">↑↓</kbd>
+                  </div>
+                  <span>ノードの順番を入れ替え</span>
+                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">⌘+Z</kbd><span>元に戻す / やり直す</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 右上: メインツールバー */}
+          <div className="ui-element fixed top-4 sm:top-6 right-4 sm:right-6 flex flex-col items-end gap-2 z-50 pointer-events-none">
+            <div className="flex gap-1 sm:gap-2 bg-white/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-sm border border-slate-200 pointer-events-auto">
+              <button type="button" onClick={undo} disabled={past.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="元に戻す (Cmd/Ctrl+Z)"><Undo2 size={20} className="sm:w-4 sm:h-4" /></button>
+              <button type="button" onClick={redo} disabled={future.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="やり直す (Cmd/Ctrl+Shift+Z)"><Redo2 size={20} className="sm:w-4 sm:h-4" /></button>
+              <div className="w-px h-8 sm:h-6 bg-slate-200 my-auto mx-1"></div>
+              
+              <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className={`p-3 sm:p-2 rounded-lg text-slate-600 transition-colors ${isMenuOpen ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100'}`} title="メニューを開く">
+                <MenuIcon size={20} className="sm:w-4 sm:h-4" />
+              </button>
+            </div>
+            
+            {/* メニューの中身 */}
+            {isMenuOpen && (
+              <div className="bg-white/95 backdrop-blur-md p-2 rounded-xl shadow-xl border border-slate-200 flex flex-col gap-1 w-48 sm:w-56 pointer-events-auto animate-in fade-in slide-in-from-top-2 origin-top-right">
+                <button type="button" onClick={() => { setIsMenuOpen(false); const newLayout = layoutType === 'tree' ? 'radial' : 'tree'; setLayoutType(newLayout); setNodesWithHistory(prev => applyAutoLayout(prev, newLayout)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Network size={18} className="text-indigo-500" /> {layoutType === 'tree' ? '放射状に変更' : 'ツリー型に変更'}
+                </button>
+                <button type="button" onClick={() => { setIsMenuOpen(false); setNodesWithHistory(prev => applyAutoLayout(prev)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <LayoutIcon size={18} className="text-emerald-500" /> 自動整列
+                </button>
+                <button type="button" onClick={() => { setIsMenuOpen(false); tempModelNameRef.current = modelName; setSettingsModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <SettingsIcon size={18} className="text-slate-500" /> AIモデル設定
+                </button>
+                <div className="h-px bg-slate-100 my-1 mx-2"></div>
+                
+                <button type="button" onClick={() => { setIsMenuOpen(false); setExportedText(buildMapText(visibleNodes)); setExportTextModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <ClipboardList size={18} className="text-purple-500" /> テキスト化（コピー）
+                </button>
+                <button type="button" onClick={() => { setIsMenuOpen(false); takeSnapshot(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <CameraIcon size={18} className="text-rose-500" /> 画像として保存
+                </button>
+                <div className="h-px bg-slate-100 my-1 mx-2"></div>
+                
+                <button type="button" onClick={() => { setIsMenuOpen(false); fileInputRef.current?.click(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Upload size={18} className="text-blue-500" /> ファイルから読込
+                </button>
+                <button type="button" onClick={() => { setIsMenuOpen(false); exportToHTML(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Download size={18} className="text-blue-500" /> ファイルへ書出
+                </button>
+              </div>
+            )}
+            <input type="file" ref={fileInputRef} onChange={(e) => { setIsMenuOpen(false); importFromHTML(e); }} accept=".html" className="hidden" />
+          </div>
+
+          {/* エラーメッセージ */}
+          {errorMessage && (
+            <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-medium pointer-events-none flex items-center gap-3">
+              <Info size={18} className="text-amber-400"/> {errorMessage}
+            </div>
+          )}
+
+          {/* AIモデル設定モーダル */}
+          {settingsModal && (
+            <div className="absolute inset-0 z-[120] flex items-center justify-center p-4 pointer-events-auto ui-element">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setSettingsModal(false)}></div>
+              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><SettingsIcon size={20} className="text-slate-600"/> AIモデル設定</h3>
+                  <button type="button" onClick={() => setSettingsModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <div className="p-6 flex flex-col gap-2">
+                  <p className="text-sm text-slate-600 font-bold">Gemini モデル名</p>
+                  <p className="text-xs text-slate-500 mb-2">使用するAIモデルのバージョンを手動で指定できます。（デフォルト: gemini-3.1-flash-lite-preview）</p>
+                  <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={modelName} onChange={(e) => tempModelNameRef.current = e.target.value} />
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                  <button type="button" onClick={() => setSettingsModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                  <button type="button" onClick={() => {
+                      const mName = tempModelNameRef.current.trim() || 'gemini-3.1-flash-lite-preview';
+                      setModelName(mName); localStorage.setItem('gemini_model_name', mName);
+                      setSettingsModal(false); setErrorMessage("AIモデルの設定を保存しました。");
+                    }} 
+                    className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
+                  >設定を保存する</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          
+          {/* ★修正: テキスト出力モーダル（画面最大化・折り返し対応） */}
+          {exportTextModal && (
+            <div className="absolute inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 pointer-events-auto ui-element">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setExportTextModal(false)}></div>
+              <div className="bg-white w-full max-w-[95vw] h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><ClipboardList size={20} className="text-slate-600"/> 構造をテキスト化</h3>
+                  <button type="button" onClick={() => setExportTextModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <div className="p-4 sm:p-6 flex-1 flex flex-col min-h-0">
+                  <p className="text-sm text-slate-600 mb-3">現在の{isFocusActive ? 'フォーカス対象' : 'マインドマップ'}の階層構造です。端で自動折り返しされるようになりました。</p>
+                  {/* ★修正ポイント: whitespace-pre-wrap に変更して折り返しを有効化、h-fullで高さを最大化 */}
+                  <textarea 
+                    readOnly 
+                    value={exportedText} 
+                    className="w-full flex-1 p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-slate-50 font-mono whitespace-pre-wrap overflow-y-auto" 
+                  />
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                  <button type="button" onClick={() => setExportTextModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">閉じる</button>
+                  <button type="button" onClick={() => { navigator.clipboard?.writeText(exportedText).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} 
+                    className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors flex items-center gap-2"
+                  >
+                    {copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? 'コピーしました' : 'コピーして閉じる'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* テキストから生成モーダル */}
+          {textInputModal && (
+            <div className="absolute inset-0 z-[110] flex items-center justify-center p-4 pointer-events-auto ui-element">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setTextInputModal(false)}></div>
+              <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><TextSelect size={20} className="text-purple-600"/> テキストからマップ生成</h3>
+                  <button type="button" onClick={() => setTextInputModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <div className="p-6">
+                  <p className="text-sm text-slate-600 mb-3">会議の議事録や長文を貼り付けてください。AIが階層構造を読み取り一瞬でマインドマップに変換します。</p>
+                  <textarea value={inputText} onChange={(e)=>setInputText(e.target.value)} className="w-full h-48 p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm bg-slate-50" placeholder="ここにテキストを入力..." autoFocus />
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+                  <button type="button" onClick={() => setTextInputModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                  <button type="button" onClick={generateFromText} disabled={!inputText.trim()} className="px-5 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-2"><Sparkles size={16}/> 生成する</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 結果表示モーダル */}
+          {aiModal.isOpen && (
+            <div className="absolute inset-0 z-[110] flex items-center justify-center p-4 sm:p-8 pointer-events-auto ui-element">
+              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setAiModal({isOpen:false})}></div>
+              <div className="bg-white w-full max-w-3xl max-h-full rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50 rounded-t-2xl">
+                  <h3 className="font-bold text-indigo-900 text-lg">{aiModal.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => { document.execCommand('copy'); navigator.clipboard?.writeText(aiModal.content).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-sm font-medium">
+                      {copied ? <Check size={18}/> : <Copy size={18}/>} {copied ? 'コピーしました' : 'コピー'}
+                    </button>
+                    <button type="button" onClick={() => setAiModal({isOpen:false})} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"><X size={24}/></button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                  <div className="prose prose-sm sm:prose-base max-w-none prose-indigo prose-headings:font-bold prose-a:text-indigo-600">
+                    <pre className="whitespace-pre-wrap font-sans text-slate-700 bg-transparent p-0 m-0 border-none text-base leading-relaxed">
+                      {aiModal.content.split('\n').map((line, i) => {
+                        if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-extrabold mt-6 mb-4 text-slate-900 border-b pb-2">{line.substring(2)}</h1>;
+                        if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-5 mb-3 text-slate-800">{line.substring(3)}</h2>;
+                        if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-4 mb-2 text-slate-800">{line.substring(4)}</h3>;
+                        if (line.startsWith('- [ ] ')) return <div key={i} className="flex items-start gap-2 my-2"><div className="w-5 h-5 mt-0.5 border-2 border-slate-300 rounded flex-shrink-0"></div><span>{line.substring(6).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
+                        if (line.startsWith('- ')) return <div key={i} className="flex items-start gap-2 my-1"><div className="w-1.5 h-1.5 mt-2 rounded-full bg-slate-400 flex-shrink-0"></div><span>{line.substring(2).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
+                        const formattedLine = line.split(/(\*\*.*?\*\*)/).map((part, j) => {
+                          if (part.startsWith('**') && part.endsWith('**')) return <strong key={j} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+                          return part;
+                        });
+                        return <p key={i} className="my-2 min-h-[1em]">{formattedLine}</p>;
+                      })}
+                    </pre>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50 rounded-b-2xl">
+                  <button type="button" onClick={() => setAiModal({isOpen:false})} className="px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-colors">閉じる</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
