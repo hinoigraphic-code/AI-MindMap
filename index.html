@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>AIマインドマップ</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwindでダークモードをクラス切り替えで有効にするための設定 -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -15,7 +21,9 @@
     .touch-none { touch-action: none; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; } html, body { height: 100%; position: fixed; width: 100%; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; } 
+    html.dark ::-webkit-scrollbar-thumb { background: #475569; }
+    html, body { height: 100%; position: fixed; width: 100%; }
   </style>
 </head>
 <body>
@@ -48,32 +56,29 @@
     const TargetIcon = createIcon("fas fa-crosshairs"); const CameraIcon = createIcon("fas fa-camera"); 
     const MicIcon = createIcon("fas fa-microphone"); const StopCircleIcon = createIcon("fas fa-stop-circle");
     const Minus = createIcon("fas fa-minus"); 
-    // ★追加: 順番入れ替え用アイコン
     const ArrowUp = createIcon("fas fa-arrow-up"); const ArrowDown = createIcon("fas fa-arrow-down");
-    // ★追加: ハンバーガーメニュー用アイコン
     const MenuIcon = createIcon("fas fa-bars");
-    // ★追加: 画像読み込み用アイコン
     const ImageIcon = createIcon("fas fa-image");
+    // ★追加: ダークモード・ライトモード用アイコン
+    const Moon = createIcon("fas fa-moon"); const Sun = createIcon("fas fa-sun");
 
     const getInitialNodes = () => [{ id: 'root', text: 'メインテーマ', x: 0, y: 0, parentId: null, isCollapsed: false }];
     const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-    // ★追加: 階層ごとの色を決定する関数
+    // ★修正: ダークモード対応のカラーセットに変更
     const getNodeColors = (depth, isRoot, isSelected) => {
-      if (isRoot || depth === 0) return `bg-indigo-600 text-white ${isSelected ? 'ring-4 ring-indigo-300' : ''}`;
+      if (isRoot || depth === 0) return `bg-indigo-600 text-white ${isSelected ? 'ring-4 ring-indigo-300 dark:ring-indigo-400' : ''}`;
       
-      // 階層1〜5までの淡いカラーテーマ（6以降はループします）
       const themes = [
-        { bg: 'bg-blue-50', text: 'text-blue-900', border: 'border-blue-200', ring: 'ring-blue-200' },
-        { bg: 'bg-emerald-50', text: 'text-emerald-900', border: 'border-emerald-200', ring: 'ring-emerald-200' },
-        { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-200', ring: 'ring-amber-200' },
-        { bg: 'bg-rose-50', text: 'text-rose-900', border: 'border-rose-200', ring: 'ring-rose-200' },
-        { bg: 'bg-purple-50', text: 'text-purple-900', border: 'border-purple-200', ring: 'ring-purple-200' },
+        { bg: 'bg-blue-50 dark:bg-blue-900/30', text: 'text-blue-900 dark:text-blue-100', border: 'border-blue-200 dark:border-blue-800', ring: 'ring-blue-200 dark:ring-blue-700' },
+        { bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-900 dark:text-emerald-100', border: 'border-emerald-200 dark:border-emerald-800', ring: 'ring-emerald-200 dark:ring-emerald-700' },
+        { bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-900 dark:text-amber-100', border: 'border-amber-200 dark:border-amber-800', ring: 'ring-amber-200 dark:ring-amber-700' },
+        { bg: 'bg-rose-50 dark:bg-rose-900/30', text: 'text-rose-900 dark:text-rose-100', border: 'border-rose-200 dark:border-rose-800', ring: 'ring-rose-200 dark:ring-rose-700' },
+        { bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-900 dark:text-purple-100', border: 'border-purple-200 dark:border-purple-800', ring: 'ring-purple-200 dark:ring-purple-700' },
       ];
       const theme = themes[(depth - 1) % themes.length];
       
-      // 選択されている場合は太いボーダーに、そうでない場合はテーマのボーダーを適用
-      return `${theme.bg} ${theme.text} ${isSelected ? `ring-4 ${theme.ring} border-indigo-500` : theme.border}`;
+      return `${theme.bg} ${theme.text} ${isSelected ? `ring-4 ${theme.ring} border-indigo-500 dark:border-indigo-400` : theme.border}`;
     };
 
     const callAI = async (prompt, systemInstruction = "", useJson = false, apiKey, modelName) => {
@@ -118,10 +123,8 @@
       }
     };
 
-    // ★追加: 画像を認識するためのAI関数
     const callAIImage = async (base64Image, mimeType, apiKey, modelName) => {
       if (!apiKey) throw new Error("API_KEY_MISSING");
-      // ★修正: 固定のモデル名を廃止し、設定画面のモデル（指定がない場合は安定したgemini-3.1-flash-lite-preview）を使用する
       const currentModel = modelName || "gemini-3.1-flash-lite-preview";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
       const prompt = "この画像は手書きのマインドマップです。内容を読み取り、以下のJSON形式の階層構造で出力してください。\n[{ \"id\": \"英数字\", \"text\": \"テキスト\", \"parentId\": \"親id(ルートはnull)\" }]";
@@ -144,7 +147,6 @@
       }
     };
 
-    // --- GAS API クライアント (URLを引数で受け取る仕様) ---
     const fetchMapsFromGAS = async (gasUrl) => {
       try { 
         const res = await fetch(`${gasUrl}?action=list`); 
@@ -175,15 +177,23 @@
     };
 
     function App() {
-      // ★修正: localStorageから各種設定を読み込む。なければ空文字
       const [gasUrl, setGasUrl] = useState(localStorage.getItem('mindmap_gas_url') || '');
       const [apiKey, setApiKey] = useState(localStorage.getItem('mindmap_api_key') || '');
       const [modelName, setModelName] = useState(localStorage.getItem('gemini_model_name') || 'gemini-3.1-flash-lite-preview');
       
       const [settingsModal, setSettingsModal] = useState(false);
-      // ★追加: 初回セットアップモーダル（URLかAPIキーがない場合に強制表示）
       const [setupModal, setSetupModal] = useState(!localStorage.getItem('mindmap_gas_url') || !localStorage.getItem('mindmap_api_key'));
       
+      // ★追加: ダークモードのState。localStorageから初期状態を読み込む
+      const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('mindmap_dark_mode') === 'true');
+
+      // ★追加: ダークモードの切り替えをhtmlタグに反映させる
+      useEffect(() => {
+        if (isDarkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        localStorage.setItem('mindmap_dark_mode', isDarkMode);
+      }, [isDarkMode]);
+
       const tempGasUrlRef = useRef(gasUrl);
       const tempApiKeyRef = useRef(apiKey);
       const tempModelNameRef = useRef(modelName);
@@ -208,18 +218,15 @@
       const [selectedNodeId, setSelectedNodeId] = useState('root');
       const [editingNodeId, setEditingNodeId] = useState(null);
       const [errorMessage, setErrorMessage] = useState(null);
-      // ★修正: 初期状態で操作ガイドを閉じる
       const [showHelp, setShowHelp] = useState(false);
       const [dropTargetId, setDropTargetId] = useState(null);
       
-      // ★追加: 右上のハンバーガーメニューの開閉状態
       const [isMenuOpen, setIsMenuOpen] = useState(false);
       const [linkState, setLinkState] = useState({ isLinking: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
 
       const [focusSelection, setFocusSelection] = useState(new Set());
       const [isFocusActive, setIsFocusActive] = useState(false);
       
-      // ★追加: レイアウト形式のState（tree: ツリー型, radial: 放射状）
       const [layoutType, setLayoutType] = useState('tree');
       
       const [isCapturing, setIsCapturing] = useState(false);
@@ -242,7 +249,7 @@
 
       const isPanning = useRef(false); const lastPanPos = useRef({ x: 0, y: 0 }); const containerRef = useRef(null); const lastTouchDistance = useRef(null);
       const fileInputRef = useRef(null); const dropTargetIdRef = useRef(null);
-      const imageInputRef = useRef(null); // ★追加: 画像読み込み用Ref
+      const imageInputRef = useRef(null);
       const dragInfo = useRef({ isDragging: false, nodeId: null, startX: 0, startY: 0, initialPositions: new Map(), initialNodesForHistory: null });
       const linkInfo = useRef({ isLinking: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, initialNodesForHistory: null });
       const nodesRef = useRef(nodes);
@@ -251,31 +258,26 @@
 
       useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
-    // ★スマホ用ピンチズームの修正（中心点対応版）
     useEffect(() => {
       const container = containerRef.current;
       if (!container) return;
 
       const handleTouchMove = (e) => {
         if (e.touches.length === 2) {
-          e.preventDefault(); // ブラウザ独自のズームを防止
+          e.preventDefault(); 
           const t1 = e.touches[0];
           const t2 = e.touches[1];
           
-          // 指と指の距離
           const distance = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-          // 指と指の中心点（画面上の座標）
           const centerX = (t1.clientX + t2.clientX) / 2;
           const centerY = (t1.clientY + t2.clientY) / 2;
 
           if (lastTouchDistance.current !== null) {
             const delta = distance - lastTouchDistance.current;
-            const zoomStep = delta * 0.005; // ズーム感度を少しマイルドに調整
+            const zoomStep = delta * 0.005; 
             
             setZoom(prevZoom => {
               const newZoom = Math.min(Math.max(0.1, prevZoom + zoomStep), 3);
-              
-              // ズーム前後の倍率比から、中心点を維持するための移動量を計算
               setPan(prevPan => {
                 const ratio = newZoom / prevZoom;
                 const dx = centerX - prevPan.x;
@@ -285,7 +287,6 @@
                   y: prevPan.y - (dy * ratio - dy)
                 };
               });
-              
               return newZoom;
             });
           }
@@ -304,13 +305,10 @@
     }, []);
 
       const resetView = useCallback((targetNodes = null) => {
-        // 描画が完了してから確実に中央へ移動させるために少し遅らせる
         setTimeout(() => {
           setZoom(1); 
           if (containerRef.current) {
-            // イベントオブジェクトが渡された場合（リサイズ時やボタンクリック時など）は無視する
             const currentNodes = Array.isArray(targetNodes) ? targetNodes : nodesRef.current;
-            // ルートノード（親がないノード）、見つからなければ最初のノードを基準にする
             const rootNode = currentNodes.find(node => !node.parentId) || currentNodes[0];
             const rootX = rootNode ? rootNode.x : 0;
             const rootY = rootNode ? rootNode.y : 0;
@@ -322,15 +320,12 @@
         }, 50);
       }, []);
 
-      // ★修正: 勝手に画面中央に戻る（視点リセット）のを防ぐため、画面サイズ変更時のリセットを完全廃止
       useEffect(() => { 
-        // ツール立ち上げ時の初回ロード時のみ1回だけ中央に合わせる
         resetView(); 
       }, [resetView]);
-      // --- GASからの初期データロード ---
+
       useEffect(() => {
         let isMounted = true;
-        // ★修正: gasUrl と apiKey が両方設定されている場合のみロードを開始する
         if (!gasUrl || !apiKey || setupModal) return;
 
         fetchMapsFromGAS(gasUrl).then((mapList) => {
@@ -348,7 +343,6 @@
         return () => { isMounted = false; };
       }, [gasUrl, apiKey, setupModal]);
 
-      // --- GASへの自動同期 ---
       useEffect(() => {
         if (!currentMapIdRef.current) return;
         if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
@@ -373,9 +367,6 @@
         }, 1500); 
       }, [nodes]); 
 
-      // ==========================================
-      // ★自動レイアウト（重なり完全防止・スマート余白・階層計算版）
-      // ==========================================
       const applyAutoLayout = useCallback((currentNodes, forceLayoutType = null) => {
         const currentLayout = forceLayoutType || layoutType;
         if (!currentNodes || currentNodes.length === 0) return currentNodes;
@@ -394,7 +385,6 @@
           });
           
           const h = estimatedLines * 24 + 80; 
-          // ★ depth（深さ）を初期化
           nodeInfo[n.id] = { ...n, children: [], h, w, depth: 0, treeHeight: 0, isCollapsed: n.isCollapsed || false };
         });
 
@@ -434,7 +424,6 @@
           const rightChildren = children.filter((_, i) => i % 2 === 0);
           const leftChildren = children.filter((_, i) => i % 2 !== 0);
 
-          // ★ depthを子ノードへ伝播させる
           const assignPosRadial = (id, x, startY, parentX, parentY, isHidden, direction, depth) => {
             const info = nodeInfo[id];
             info.depth = depth;
@@ -468,7 +457,6 @@
           });
 
         } else {
-          // ★ depthを子ノードへ伝播させる
           const assignPos = (id, x, startY, parentX, parentY, isHidden, depth) => {
             const info = nodeInfo[id];
             info.depth = depth;
@@ -496,7 +484,6 @@
           });
         }
 
-        // ★計算した幅(w)と深さ(depth)をノード情報に保存する
         return currentNodes.map(n => ({ 
           ...n, 
           x: nodeInfo[n.id].newX, 
@@ -537,7 +524,6 @@
       }, [layoutedAndCollapsedNodes, focusSelection, isFocusActive]);
 
 
-      // --- フォーカスモードと音声入力 ---
       const toggleFocusSelection = (id) => {
         setFocusSelection(prev => {
           const next = new Set(prev);
@@ -612,15 +598,11 @@
       };
 
 
-      // ==========================================
-      // ★順番入れ替え（Move Up/Down）ロジック
-      // ==========================================
       const moveNode = useCallback((nodeId, direction) => {
         setNodesWithHistory(prev => {
           const node = prev.find(n => n.id === nodeId);
           if (!node) return prev;
 
-          // 親が同じノード（兄弟）を現在の画面上のY座標の順に取得する
           const siblings = prev.filter(n => n.parentId === node.parentId).sort((a, b) => a.y - b.y);
           const siblingIndex = siblings.findIndex(n => n.id === nodeId);
 
@@ -632,7 +614,6 @@
           }
 
           if (targetNode) {
-            // Y座標を強制的に入れ替えることで、次のapplyAutoLayoutのソート順を入れ替える
             const nextNodes = prev.map(n => {
               if (n.id === node.id) return { ...n, y: targetNode.y };
               if (n.id === targetNode.id) return { ...n, y: node.y };
@@ -640,14 +621,11 @@
             });
             return applyAutoLayout(nextNodes);
           }
-          return prev; // 移動できない場合は何もしない
+          return prev; 
         });
       }, [setNodesWithHistory, applyAutoLayout]);
 
 
-      // ==========================================
-      // ★スナップショット用：画像化処理
-      // ==========================================
       const takeSnapshot = async () => {
         if (visibleNodes.length === 0) return;
         
@@ -667,7 +645,7 @@
           if (element) {
             try {
               const canvas = await html2canvas(element, { 
-                backgroundColor: '#f8fafc',
+                backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
                 scale: 2 
               });
               const url = canvas.toDataURL('image/png');
@@ -689,7 +667,6 @@
         setNodesWithHistory(prev => applyAutoLayout(prev));
       }, [applyAutoLayout, setNodesWithHistory]);
 
-      // --- クラウドアクション ---
       const handleCreateNewMap = async (e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -756,7 +733,6 @@
         if (success) { setSyncStatus(''); } else { setSyncStatus('エラー'); }
       };
 
-      // --- ユーティリティ ---
       const isDescendant = useCallback((ancestorId, targetId, currentNodes) => {
         if (ancestorId === targetId) return true; let current = currentNodes.find(n => n.id === targetId);
         while (current && current.parentId) { if (current.parentId === ancestorId) return true; current = currentNodes.find(n => n.id === current.parentId); }
@@ -769,14 +745,11 @@
         return ids;
       }, []);
 
-      // ★修正: 画面の並び順（y座標の昇順）とMarkdownの出力を完全に一致させる
       const buildMapText = (targetNodes) => {
-        // 親がいないルートノードを y 座標でソート
         const roots = targetNodes.filter(n => !n.parentId).sort((a, b) => a.y - b.y); 
         let text = "";
         const traverse = (node, depth) => { 
           text += `${"  ".repeat(depth)}- ${node.text}\n`; 
-          // 子ノードも y 座標の順にソートして再帰処理
           const children = targetNodes.filter(n => n.parentId === node.id).sort((a, b) => a.y - b.y);
           children.forEach(c => traverse(c, depth + 1)); 
         };
@@ -790,7 +763,6 @@
         return path.join(" > ");
       };
 
-      // --- 履歴管理 ---
       const setNodesWithHistory = useCallback((action) => {
         setNodes(prev => {
           const next = typeof action === 'function' ? action(prev) : action;
@@ -811,11 +783,10 @@
         setNodes(next); setSelectedNodeId(null);
       }, [future]);
 
-      // --- AI機能群 ---
       const handleAIError = (e) => {
         console.error(e); setAiLoading(false);
         if (e.message.includes("API_KEY_MISSING") || e.message.includes("API key not valid") || e.message.includes("models/")) { 
-          setErrorMessage("APIキーまたはモデル名が不正です。設定とGAS側のキーを確認してください。"); 
+          setErrorMessage("APIキーまたはモデル名が不正です。設定をご確認ください。"); 
         } else { setErrorMessage("AIの処理中にエラーが発生しました。"); }
       };
 
@@ -926,7 +897,6 @@
         } catch (e) { handleAIError(e); } setAiLoading(false);
       };
 
-      // ★追加: 画像からマップを生成する機能
       const generateFromImage = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -956,7 +926,6 @@
         e.target.value = '';
       };
 
-      // --- ノード操作 ---
       const addChild = useCallback((parentId) => {
         setNodesWithHistory(prev => {
           const parent = prev.find(n => n.id === parentId); if (!parent) return prev;
@@ -996,7 +965,6 @@
         setNodes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
       }, []);
 
-      // --- キーボード操作 ---
       useEffect(() => {
         const handleKeyDown = (e) => {
           if (editingNodeId || textInputModal || exportTextModal || aiModal.isOpen || mapToDelete || settingsModal) return; 
@@ -1004,7 +972,6 @@
           if (e.key.toLowerCase() === 'y' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); redo(); return; }
           if (!selectedNodeId) return;
           
-          // ★追加: Cmd+Up / Cmd+Down でもノードの順番を入れ替え可能に
           if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); moveNode(selectedNodeId, 'up'); }
           else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); moveNode(selectedNodeId, 'down'); }
           
@@ -1015,7 +982,6 @@
         window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
       }, [selectedNodeId, editingNodeId, textInputModal, exportTextModal, aiModal.isOpen, mapToDelete, settingsModal, nodes, addChild, addSibling, deleteNode, moveNode, undo, redo]);
 
-      // --- マウス・タッチ操作 ---
       const handleDoubleClickCanvas = (e) => {
         if (e.target.closest('.mindmap-node') || e.target.closest('.ui-element')) return;
         const rect = containerRef.current.getBoundingClientRect(); const x = (e.clientX - rect.left - pan.x) / zoom; const y = (e.clientY - rect.top - pan.y) / zoom;
@@ -1030,7 +996,7 @@
         setSelectedNodeId(null); 
         if (editingNodeId) { handleFinishEdit(); }
         setNodeAIMenuId(null); setShowAIPanel(false); setIsSidebarOpen(false);
-        setIsMenuOpen(false); // ★追加: キャンバスをタッチしたらメニューを閉じる
+        setIsMenuOpen(false);
         dragInfo.current.isDragging = false; linkInfo.current.isLinking = false; setLinkState({ isLinking: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
       };
 
@@ -1095,7 +1061,6 @@
         setZoom(newZoom); setPan({ x: e.clientX - mouseX * newZoom, y: e.clientY - mouseY * newZoom });
       };
 
-      // --- ローカル用ファイル書き出し ---
       const exportToHTML = () => {
         const rootNode = nodes.find(n => !n.parentId) || nodes[0];
         const fileName = `${rootNode.text || 'mindmap'}.html`;
@@ -1125,21 +1090,21 @@
 
       useEffect(() => { if (errorMessage) { const timer = setTimeout(() => setErrorMessage(null), 3000); return () => clearTimeout(timer); } }, [errorMessage]);
 
-      // --- 描画ロジック ---
+      // ★修正: 線の色もダークモードに対応させる
       const renderEdges = (nodeList, isDashed = false, offsetX = 0, offsetY = 0) => {
         return nodeList.map(node => {
           if (!node.parentId) return null; const parent = nodes.find(n => n.id === node.parentId) || suggestedNodes.find(n => n.id === node.parentId); if (!parent) return null;
           const d = `M ${parent.x - offsetX} ${parent.y - offsetY} C ${parent.x - offsetX + (node.x - parent.x) / 2} ${parent.y - offsetY}, ${parent.x - offsetX + (node.x - parent.x) / 2} ${node.y - offsetY}, ${node.x - offsetX} ${node.y - offsetY}`;
-          return <path key={`edge-${node.id}`} d={d} stroke={isDashed ? "#818cf8" : "#cbd5e1"} strokeWidth={3 / (offsetX===0 ? zoom : 1)} fill="none" strokeLinecap="round" className={isDashed ? "stroke-dasharray-4 animate-pulse" : "transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"} style={isDashed ? { strokeDasharray: '6,6' } : {}} />;
+          return <path key={`edge-${node.id}`} d={d} stroke={isDashed ? (isDarkMode ? "#6366f1" : "#818cf8") : (isDarkMode ? "#475569" : "#cbd5e1")} strokeWidth={3 / (offsetX===0 ? zoom : 1)} fill="none" strokeLinecap="round" className={isDashed ? "stroke-dasharray-4 animate-pulse" : "transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"} style={isDashed ? { strokeDasharray: '6,6' } : {}} />;
         });
       };
 
       return (
         <div 
-          className="relative w-full h-screen overflow-hidden bg-slate-50 select-none font-sans touch-none"
+          className="relative w-full h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 select-none font-sans touch-none transition-colors duration-300"
           ref={containerRef} onDoubleClick={handleDoubleClickCanvas} onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onWheel={handleWheel}
-          style={{ backgroundImage: `radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px)`, backgroundSize: `${24 * zoom}px ${24 * zoom}px`, backgroundPosition: `${pan.x}px ${pan.y}px` }}
+          style={{ backgroundImage: `radial-gradient(circle, ${isDarkMode ? '#334155' : '#e2e8f0'} 1.5px, transparent 1.5px)`, backgroundSize: `${24 * zoom}px ${24 * zoom}px`, backgroundPosition: `${pan.x}px ${pan.y}px` }}
         >
           {/* パン・ズーム制御用キャンバス */}
           <div className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
@@ -1162,11 +1127,11 @@
             </svg>
 
             {suggestedNodes.map(node => (
-              <div key={node.id} className="absolute pointer-events-auto z-10 flex flex-col items-center justify-center bg-indigo-50/80 text-indigo-800 border-2 border-dashed border-indigo-300 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-indigo-100 transition-all hover:scale-105 shadow-sm"
+              <div key={node.id} className="absolute pointer-events-auto z-10 flex flex-col items-center justify-center bg-indigo-50/80 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-100 border-2 border-dashed border-indigo-300 dark:border-indigo-600 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-all hover:scale-105 shadow-sm"
                 style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)', minWidth: '120px', maxWidth: '250px' }}
                 onPointerDown={(e) => { e.stopPropagation(); commitSuggestion(node); }}
               >
-                <div className="absolute -top-3 -right-3 bg-indigo-100 text-indigo-600 rounded-full p-1 shadow-sm"><Sparkles size={14}/></div>
+                <div className="absolute -top-3 -right-3 bg-indigo-100 dark:bg-indigo-800 text-indigo-600 dark:text-indigo-300 rounded-full p-1 shadow-sm"><Sparkles size={14}/></div>
                 <div className="w-full p-3 text-center whitespace-pre-wrap break-words text-sm font-medium">{node.text}</div>
               </div>
             ))}
@@ -1182,24 +1147,23 @@
               const descendantIds = getDescendantIds(node.id, nodesRef.current);
               const hasChildren = descendantIds.length > 0;
 
-              // ★追加: 階層に基づいたカラーを取得
               const nodeColors = getNodeColors(node.depth || 0, isRoot, isSelected);
 
               return (
                 <div key={node.id}
                   className={`mindmap-node absolute pointer-events-auto z-20 flex flex-col items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
                     ${nodeColors}
-                    ${isSelectedForFocus && !isFocusActive ? 'ring-4 ring-amber-200 border-amber-400' : ''}
+                    ${isSelectedForFocus && !isFocusActive ? 'ring-4 ring-amber-200 dark:ring-amber-500 border-amber-400 dark:border-amber-400' : ''}
                     ${isFocusActive && isSelectedForFocus ? 'ring-4 ring-amber-400 border-amber-500' : ''}
                     ${isDropTarget ? 'ring-4 ring-amber-400 bg-amber-50 scale-105 shadow-xl' : ''}
                     ${isDragged || isLinkingSrc ? 'opacity-90 shadow-2xl scale-105 z-50' : ''}
                   `}
                   style={{
                     left: node.x, top: node.y, transform: 'translate(-50%, -50%)', 
-                    width: node.w ? `${node.w}px` : undefined, // ★動的に計算された幅を適用
-                    minWidth: '160px', maxWidth: '340px', // ★スマホに収まる上限に変更
+                    width: node.w ? `${node.w}px` : undefined, 
+                    minWidth: '160px', maxWidth: '340px', 
                     borderRadius: isRoot ? '12px' : '8px', borderWidth: isRoot ? '0' : '2px',
-                    boxShadow: isSelected && !isDragged ? '0 10px 25px -5px rgba(0,0,0,0.1)' : '0 4px 6px -1px rgba(0,0,0,0.1)',
+                    boxShadow: isSelected && !isDragged ? '0 10px 25px -5px rgba(0,0,0,0.2)' : '0 4px 6px -1px rgba(0,0,0,0.1)',
                     zIndex: isSelected || isDropTarget || isDragged || isSelectedForFocus ? 30 : 20
                   }}
                   onPointerDown={(e) => { e.stopPropagation(); setSelectedNodeId(node.id); setNodeAIMenuId(null); if(editingNodeId && editingNodeId !== node.id) handleFinishEdit(); }}
@@ -1217,28 +1181,28 @@
                       onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleFinishEdit(); } }}
                       ref={(el) => { if (el) { el.style.height = 'inherit'; el.style.height = `${el.scrollHeight}px`; } }}
                       autoFocus 
-                      className={`w-full bg-transparent outline-none resize-none text-center p-3 text-sm sm:text-base font-medium overflow-hidden ${isRoot?'text-white':''}`} 
+                      className={`w-full bg-transparent outline-none resize-none text-center p-3 text-sm sm:text-base font-medium overflow-hidden ${isRoot?'text-white':'text-slate-800 dark:text-slate-100'}`} 
                       style={{ minHeight: '60px' }} 
                     />
                   ) : (
-                    <div className="w-full p-4 text-center whitespace-pre-wrap break-words text-sm sm:text-base font-medium select-text cursor-text">{node.text || <span className="text-slate-400 opacity-50">空のノード</span>}</div>
+                    <div className="w-full p-4 text-center whitespace-pre-wrap break-words text-sm sm:text-base font-medium select-text cursor-text">{node.text || <span className="text-slate-400 dark:text-slate-500 opacity-50">空のノード</span>}</div>
                   )}
 
                   {hasChildren && !isEditing && !isDragged && (
                     <div 
-                      className={`absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-6 bg-white border border-slate-300 rounded-full flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-400 z-50 cursor-pointer shadow-sm transition-colors touch-none ${node.isCollapsed ? 'border-indigo-300 ring-2 ring-indigo-100' : ''}`}
+                      className={`absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-6 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-400 dark:hover:border-indigo-500 z-50 cursor-pointer shadow-sm transition-colors touch-none ${node.isCollapsed ? 'border-indigo-300 dark:border-indigo-600 ring-2 ring-indigo-100 dark:ring-indigo-900' : ''}`}
                       onPointerDown={(e) => {
                         e.stopPropagation();
                         setNodesWithHistory(prev => applyAutoLayout(prev.map(n => n.id === node.id ? { ...n, isCollapsed: !n.isCollapsed } : n)));
                       }}
                       title={node.isCollapsed ? "展開する" : "格納する"}
                     >
-                      {node.isCollapsed ? <span className="text-[10px] font-bold text-indigo-600">+{descendantIds.length}</span> : <Minus size={10} />}
+                      {node.isCollapsed ? <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">+{descendantIds.length}</span> : <Minus size={10} />}
                     </div>
                   )}
 
                   {isSelected && !isEditing && (
-                    <div className="absolute -top-4 -right-4 p-2.5 bg-white rounded-full shadow-md border border-slate-200 cursor-grab active:cursor-grabbing text-slate-500 hover:text-indigo-600 touch-none pointer-events-auto"
+                    <div className="absolute -top-4 -right-4 p-2.5 bg-white dark:bg-slate-700 rounded-full shadow-md border border-slate-200 dark:border-slate-600 cursor-grab active:cursor-grabbing text-slate-500 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 touch-none pointer-events-auto"
                       style={{ transform: `scale(${1/Math.max(zoom, 0.5)})`, transformOrigin: 'center center' }}
                       onPointerDown={(e) => {
                         e.stopPropagation(); if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
@@ -1265,47 +1229,46 @@
                   )}
 
                   {isSelected && !isEditing && !isDragged && (
-                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 flex gap-1 sm:gap-2 bg-white p-1.5 rounded-full shadow-lg border border-slate-200 pointer-events-auto w-max"
+                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 flex gap-1 sm:gap-2 bg-white dark:bg-slate-800 p-1.5 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 pointer-events-auto w-max"
                       style={{ transform: `translateX(-50%) scale(${1/Math.max(zoom, 0.5)})`, transformOrigin: 'top center' }}
                       onPointerDown={(e) => e.stopPropagation()}
                     >
-                      <button type="button" onClick={(e) => { e.stopPropagation(); toggleFocusSelection(node.id); }} className={`p-2.5 sm:p-2 hover:bg-slate-100 rounded-full ${isSelectedForFocus ? 'text-amber-500' : 'text-slate-500'}`} title="フォーカス対象にストック"><TargetIcon size={20} /></button>
-                      <div className="w-px bg-slate-200 mx-0.5"></div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); toggleFocusSelection(node.id); }} className={`p-2.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full ${isSelectedForFocus ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`} title="フォーカス対象にストック"><TargetIcon size={20} /></button>
+                      <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
 
                       <button type="button" onClick={(e) => { e.stopPropagation(); isRecordingThisNode ? stopRecording() : startRecording(node.id); }} 
-                        className={`p-2.5 sm:p-2 rounded-full transition-colors ${isRecordingThisNode ? 'bg-rose-100 text-rose-600 animate-pulse' : 'hover:bg-slate-100 text-slate-500'}`} 
+                        className={`p-2.5 sm:p-2 rounded-full transition-colors ${isRecordingThisNode ? 'bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 animate-pulse' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400'}`} 
                         title={isRecordingThisNode ? "録音を停止して文字起こし" : "音声入力（AI文字起こし）"}>
                         {isRecordingThisNode ? <StopCircleIcon size={20} /> : <MicIcon size={20} />}
                       </button>
-                      <div className="w-px bg-slate-200 mx-0.5"></div>
+                      <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
 
                       <div className="relative ai-menu-container">
                         <button type="button" onClick={(e) => { e.stopPropagation(); setNodeAIMenuId(showAIMenu ? null : node.id); }} 
-                          className={`p-2.5 sm:p-2 rounded-full transition-colors ${showAIMenu ? 'bg-purple-100 text-purple-700' : 'hover:bg-slate-100 text-purple-600'}`} title="AI機能">
+                          className={`p-2.5 sm:p-2 rounded-full transition-colors ${showAIMenu ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-purple-600 dark:text-purple-400'}`} title="AI機能">
                           <Wand2 size={20} />
                         </button>
                         {showAIMenu && (
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 bg-white rounded-xl shadow-xl border border-slate-200 p-2 flex flex-col gap-1 w-48 z-50 animate-in fade-in slide-in-from-bottom-2">
-                            <div className="text-[10px] text-slate-400 font-bold px-2 py-1 uppercase tracking-wider">AI アシスタント</div>
-                            <button type="button" onClick={(e)=>{e.stopPropagation();generateSuggestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><Lightbulb size={16} className="text-amber-500"/> 次のアイデアを提案</button>
-                            <button type="button" onClick={(e)=>{e.stopPropagation();generateQuestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><HelpCircle size={16} className="text-rose-500"/> 鋭いツッコミ</button>
-                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, '5W1H');}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> 5W1H で展開</button>
-                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, 'メリット・デメリット');}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> メリット・デメリット</button>
-                            <button type="button" onClick={(e)=>{e.stopPropagation();generateEmoji(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 p-2 rounded-lg text-left"><SmilePlus size={16} className="text-emerald-500"/> アイコンを自動付与</button>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 flex flex-col gap-1 w-48 z-50 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold px-2 py-1 uppercase tracking-wider">AI アシスタント</div>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateSuggestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg text-left"><Lightbulb size={16} className="text-amber-500"/> 次のアイデアを提案</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateQuestions(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg text-left"><HelpCircle size={16} className="text-rose-500"/> 鋭いツッコミ</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, '5W1H');}} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> 5W1H で展開</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();expandFramework(node.id, 'メリット・デメリット');}} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg text-left"><ListTree size={16} className="text-blue-500"/> メリット・デメリット</button>
+                            <button type="button" onClick={(e)=>{e.stopPropagation();generateEmoji(node.id);}} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg text-left"><SmilePlus size={16} className="text-emerald-500"/> アイコンを自動付与</button>
                           </div>
                         )}
                       </div>
-                      <div className="w-px bg-slate-200 mx-0.5"></div>
+                      <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
                       
-                      {/* ★追加: 順番入れ替え（同格のノードが2つ以上ある場合のみ操作可能） */}
-                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'up'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-500 hover:text-indigo-600" title="順番を上に移動"><ArrowUp size={20} /></button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'down'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-500 hover:text-indigo-600" title="順番を下に移動"><ArrowDown size={20} /></button>
-                      <div className="w-px bg-slate-200 mx-0.5"></div>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'up'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="順番を上に移動"><ArrowUp size={20} /></button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveNode(node.id, 'down'); }} className="p-2.5 sm:p-2 rounded-full transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="順番を下に移動"><ArrowDown size={20} /></button>
+                      <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
 
-                      <button type="button" onClick={(e) => { e.stopPropagation(); addChild(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-indigo-600" title="子ノードを追加"><Plus size={20} /></button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-emerald-600" title="テキストを編集"><Edit2 size={20} /></button>
-                      {node.parentId && <button type="button" onClick={(e) => { e.stopPropagation(); unlinkNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-amber-600" title="親からのリンクを解除"><Unlink size={20} /></button>}
-                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 rounded-full text-rose-600" title="このノードと子孫を削除"><Trash2 size={20} /></button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); addChild(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-indigo-600 dark:text-indigo-400" title="子ノードを追加"><Plus size={20} /></button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-emerald-600 dark:text-emerald-400" title="テキストを編集"><Edit2 size={20} /></button>
+                      {node.parentId && <button type="button" onClick={(e) => { e.stopPropagation(); unlinkNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-amber-600 dark:text-amber-500" title="親からのリンクを解除"><Unlink size={20} /></button>}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }} className="p-2.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-rose-600 dark:text-rose-500" title="このノードと子孫を削除"><Trash2 size={20} /></button>
                     </div>
                   )}
                 </div>
@@ -1317,11 +1280,11 @@
           {/* ★スナップショット（画像化）専用の非表示領域 */}
           {/* ========================================== */}
           {isCapturing && (
-            <div id="snapshot-area" className="absolute z-[-1]" style={{ 
+            <div id="snapshot-area" className={`absolute z-[-1] ${isDarkMode ? 'dark' : ''}`} style={{ 
               top: -9999, left: -9999, 
               width: captureBox.width, height: captureBox.height, 
-              backgroundColor: '#f8fafc', 
-              backgroundImage: `radial-gradient(circle, #e2e8f0 1.5px, transparent 1.5px)`, 
+              backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', 
+              backgroundImage: `radial-gradient(circle, ${isDarkMode ? '#334155' : '#e2e8f0'} 1.5px, transparent 1.5px)`, 
               backgroundSize: `24px 24px`,
               backgroundPosition: `${-captureBox.minX}px ${-captureBox.minY}px`
             }}>
@@ -1330,7 +1293,6 @@
               </svg>
               {visibleNodes.map(node => {
                 const isRoot = !node.parentId;
-                // ★追加: 画像保存時もカラーを適用
                 const nodeColors = getNodeColors(node.depth || 0, isRoot, false);
                 return (
                   <div key={`snap-${node.id}`}
@@ -1338,8 +1300,8 @@
                     style={{
                       left: node.x - captureBox.minX, top: node.y - captureBox.minY, 
                       transform: 'translate(-50%, -50%)', 
-                      width: node.w ? `${node.w}px` : undefined, // ★動的に計算された幅を適用
-                      minWidth: '160px', maxWidth: '340px', // ★表示用と合わせる
+                      width: node.w ? `${node.w}px` : undefined, 
+                      minWidth: '160px', maxWidth: '340px', 
                       borderRadius: isRoot ? '12px' : '8px', borderWidth: isRoot ? '0' : '2px',
                       boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
                       zIndex: 20
@@ -1356,41 +1318,41 @@
 
           {/* クラウド同期ステータス */}
           {syncStatus && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full shadow-sm border border-slate-200 text-xs font-bold text-slate-500 z-30 pointer-events-none flex items-center gap-2">
-              {syncStatus === '同期中...' || syncStatus === '新規作成中...' || syncStatus === '読み込み中...' || syncStatus === '削除中...' ? <Loader2 size={12} className="animate-spin text-indigo-500"/> : (syncStatus === 'エラー' ? <X size={12} className="text-rose-500"/> : <ServerIcon size={12} className="text-indigo-500"/>)}
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-4 py-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 z-30 pointer-events-none flex items-center gap-2">
+              {syncStatus === '同期中...' || syncStatus === '新規作成中...' || syncStatus === '読み込み中...' || syncStatus === '削除中...' ? <Loader2 size={12} className="animate-spin text-indigo-500 dark:text-indigo-400"/> : (syncStatus === 'エラー' ? <X size={12} className="text-rose-500 dark:text-rose-400"/> : <ServerIcon size={12} className="text-indigo-500 dark:text-indigo-400"/>)}
               {syncStatus}
             </div>
           )}
 
           {/* フォーカス選択中のバナー */}
           {!isFocusActive && focusSelection.size > 0 && (
-            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-50/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 text-sm font-bold text-amber-700 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-              <TargetIcon size={16} className="text-amber-500" /> {focusSelection.size}つのノードを選択中
+            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-50/90 dark:bg-amber-900/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 dark:border-amber-700 text-sm font-bold text-amber-700 dark:text-amber-300 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+              <TargetIcon size={16} className="text-amber-500 dark:text-amber-400" /> {focusSelection.size}つのノードを選択中
               <div className="flex gap-2 ml-2">
-                <button onClick={() => setIsFocusActive(true)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-full text-xs transition-colors shadow-sm">フォーカス実行</button>
-                <button onClick={() => setFocusSelection(new Set())} className="bg-white hover:bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full text-xs border border-slate-200 transition-colors">キャンセル</button>
+                <button onClick={() => setIsFocusActive(true)} className="bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white px-4 py-1.5 rounded-full text-xs transition-colors shadow-sm">フォーカス実行</button>
+                <button onClick={() => setFocusSelection(new Set())} className="bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-1.5 rounded-full text-xs border border-slate-200 dark:border-slate-600 transition-colors">キャンセル</button>
               </div>
             </div>
           )}
 
           {/* フォーカスモード起動中のバナー */}
           {isFocusActive && (
-            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-100/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 text-sm font-bold text-amber-800 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-amber-100/90 dark:bg-amber-800/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-amber-200 dark:border-amber-600 text-sm font-bold text-amber-800 dark:text-amber-200 z-30 pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
               <TargetIcon size={16} /> フォーカスモード起動中
-              <button onClick={clearFocus} className="bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 px-4 py-1.5 rounded-full text-xs transition-colors ml-2 shadow-sm">解除する</button>
+              <button onClick={clearFocus} className="bg-white hover:bg-amber-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600 px-4 py-1.5 rounded-full text-xs transition-colors ml-2 shadow-sm">解除する</button>
             </div>
           )}
 
           {/* 音声録音中のオーバーレイ */}
           {recordingNodeId && (
-            <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
-              <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-slate-200 animate-in zoom-in-95">
-                <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center animate-pulse">
+            <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-[2px]">
+              <div className="bg-white dark:bg-slate-800 px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95">
+                <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900 text-rose-500 dark:text-rose-400 rounded-full flex items-center justify-center animate-pulse">
                   <MicIcon size={32} />
                 </div>
                 <div className="text-center">
-                  <h3 className="font-bold text-slate-800 text-lg mb-1">音声を録音中...</h3>
-                  <p className="text-sm text-slate-500">話し終わったら停止ボタンを押してください</p>
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg mb-1">音声を録音中...</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">話し終わったら停止ボタンを押してください</p>
                 </div>
                 <button onClick={stopRecording} className="mt-2 px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2">
                   <StopCircleIcon size={20} /> 録音を終了
@@ -1400,18 +1362,18 @@
           )}
 
           {aiLoading && !recordingNodeId && (
-            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
-              <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200">
-                <Loader2 className="text-indigo-600" size={24} />
-                <span className="text-slate-700 font-medium">AIが思考を巡らせています...</span>
+            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-[2px]">
+              <div className="bg-white dark:bg-slate-800 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200 dark:border-slate-700">
+                <Loader2 className="text-indigo-600 dark:text-indigo-400" size={24} />
+                <span className="text-slate-700 dark:text-slate-200 font-medium">AIが思考を巡らせています...</span>
               </div>
             </div>
           )}
           {isCapturing && (
-            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
-              <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200">
-                <Loader2 className="text-indigo-600" size={24} />
-                <span className="text-slate-700 font-medium">画像を生成しています...</span>
+            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-[2px]">
+              <div className="bg-white dark:bg-slate-800 px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse border border-slate-200 dark:border-slate-700">
+                <Loader2 className="text-indigo-600 dark:text-indigo-400" size={24} />
+                <span className="text-slate-700 dark:text-slate-200 font-medium">画像を生成しています...</span>
               </div>
             </div>
           )}
@@ -1419,11 +1381,11 @@
           {/* サイドバー（マイマップ一覧） */}
           {isSidebarOpen && (
             <div className="absolute inset-0 z-[200] flex ui-element">
-              <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm pointer-events-auto" onClick={() => setIsSidebarOpen(false)}></div>
-              <div className="relative w-80 max-w-[80%] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left pointer-events-auto z-10">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                  <h2 className="font-bold text-slate-800 flex items-center gap-2"><MapIcon size={20} className="text-indigo-600"/> マイマップ (GAS)</h2>
-                  <button type="button" onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <div className="absolute inset-0 bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setIsSidebarOpen(false)}></div>
+              <div className="relative w-80 max-w-[80%] bg-white dark:bg-slate-800 h-full shadow-2xl flex flex-col animate-in slide-in-from-left pointer-events-auto z-10">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                  <h2 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><MapIcon size={20} className="text-indigo-600 dark:text-indigo-400"/> マイマップ (GAS)</h2>
+                  <button type="button" onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={20}/></button>
                 </div>
                 <div className="p-4">
                   <button type="button" onClick={handleCreateNewMap} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95">
@@ -1433,19 +1395,19 @@
                 <div className="flex-1 overflow-y-auto p-2">
                   {maps.map(m => (
                     <div key={m.id} 
-                      className={`p-3 rounded-xl mb-2 cursor-pointer transition-colors group flex justify-between items-center ${currentMapIdRef.current === m.id ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-slate-50 border border-transparent'}`}
+                      className={`p-3 rounded-xl mb-2 cursor-pointer transition-colors group flex justify-between items-center ${currentMapIdRef.current === m.id ? 'bg-indigo-50 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800' : 'hover:bg-slate-50 dark:hover:bg-slate-700 border border-transparent'}`}
                       onClick={(e) => handleLoadMap(m.id, e)}
                     >
                       <div className="overflow-hidden">
-                        <div className="font-medium text-slate-800 truncate text-sm">{m.title}</div>
-                        <div className="text-[10px] text-slate-400 mt-1">{new Date(m.updatedAt).toLocaleString()}</div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate text-sm">{m.title}</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{new Date(m.updatedAt).toLocaleString()}</div>
                       </div>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setMapToDelete(m); }} className="p-2 text-slate-300 hover:text-rose-500 opacity-0 sm:opacity-100 sm:group-hover:opacity-100 transition-opacity rounded-lg hover:bg-rose-50">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setMapToDelete(m); }} className="p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 opacity-0 sm:opacity-100 sm:group-hover:opacity-100 transition-opacity rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/50">
                         <Trash2 size={16}/>
                       </button>
                     </div>
                   ))}
-                  {maps.length === 0 && <div className="text-center text-slate-400 mt-10 text-sm">マップがありません</div>}
+                  {maps.length === 0 && <div className="text-center text-slate-400 dark:text-slate-500 mt-10 text-sm">マップがありません</div>}
                 </div>
               </div>
             </div>
@@ -1454,14 +1416,14 @@
           {/* マップの削除モーダル */}
           {mapToDelete && (
             <div className="absolute inset-0 z-[210] flex items-center justify-center p-4 pointer-events-auto ui-element">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setMapToDelete(null)}></div>
-              <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+              <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setMapToDelete(null)}></div>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
                 <div className="p-6">
-                  <h3 className="font-bold text-slate-800 text-lg mb-2">マップの削除</h3>
-                  <p className="text-sm text-slate-600">「{mapToDelete.title}」をクラウドから削除しますか？この操作は取り消せません。</p>
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg mb-2">マップの削除</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">「{mapToDelete.title}」をクラウドから削除しますか？この操作は取り消せません。</p>
                 </div>
-                <div className="px-6 py-4 flex justify-end gap-3 bg-slate-50 border-t border-slate-100">
-                  <button type="button" onClick={() => setMapToDelete(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                <div className="px-6 py-4 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700">
+                  <button type="button" onClick={() => setMapToDelete(null)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">キャンセル</button>
                   <button type="button" onClick={(e) => confirmDeleteMap(mapToDelete.id, e)} className="px-4 py-2 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-lg shadow-sm transition-colors flex items-center gap-2"><Trash2 size={16}/> 削除する</button>
                 </div>
               </div>
@@ -1471,16 +1433,15 @@
           {/* 左下: AI全体アシスタントパネル */}
           <div className="ui-element absolute bottom-16 sm:bottom-20 left-4 sm:left-6 z-40 pointer-events-auto flex flex-col items-start gap-2">
             {showAIPanel && (
-              <div className="bg-white/95 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-slate-200 flex flex-col gap-1 w-56 sm:w-64 animate-in slide-in-from-bottom-4 origin-bottom-left">
-                <div className="text-xs text-slate-500 font-bold px-3 pt-2 pb-1 flex items-center gap-2"><Sparkles size={14} className="text-indigo-500"/> AI アシスタント</div>
-                <button type="button" onClick={generateDocument} className="flex items-center gap-3 p-3 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-xl transition-colors text-sm font-medium text-left"><FileText size={18} className="text-indigo-500"/> 脳内マップを文章化</button>
-                <button type="button" onClick={generateToDo} className="flex items-center gap-3 p-3 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl transition-colors text-sm font-medium text-left"><ListChecks size={18} className="text-emerald-500"/> アクションプラン抽出</button>
-                <button type="button" onClick={detectAnomalies} className="flex items-center gap-3 p-3 hover:bg-amber-50 text-slate-700 hover:text-amber-700 rounded-xl transition-colors text-sm font-medium text-left"><MessageSquareWarning size={18} className="text-amber-500"/> 重複・矛盾のチェック</button>
-                <div className="h-px bg-slate-100 my-1 mx-2"></div>
-                <button type="button" onClick={clusterNodes} className="flex items-center gap-3 p-3 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl transition-colors text-sm font-medium text-left"><Network size={18} className="text-blue-500"/> 独立ノードの自動整理</button>
-                <button type="button" onClick={()=>{setShowAIPanel(false); setTextInputModal(true);}} className="flex items-center gap-3 p-3 hover:bg-purple-50 text-slate-700 hover:text-purple-700 rounded-xl transition-colors text-sm font-medium text-left"><TextSelect size={18} className="text-purple-500"/> 長文から自動生成</button>
-                {/* ★追加: 画像読み込みボタン */}
-                <button type="button" onClick={() => imageInputRef.current?.click()} className="flex items-center gap-3 p-3 hover:bg-orange-50 text-slate-700 hover:text-orange-700 rounded-xl transition-colors text-sm font-medium text-left"><ImageIcon size={18} className="text-orange-500"/> 画像から自動生成</button>
+              <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-1 w-56 sm:w-64 animate-in slide-in-from-bottom-4 origin-bottom-left">
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-bold px-3 pt-2 pb-1 flex items-center gap-2"><Sparkles size={14} className="text-indigo-500 dark:text-indigo-400"/> AI アシスタント</div>
+                <button type="button" onClick={generateDocument} className="flex items-center gap-3 p-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-slate-700 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 rounded-xl transition-colors text-sm font-medium text-left"><FileText size={18} className="text-indigo-500 dark:text-indigo-400"/> 脳内マップを文章化</button>
+                <button type="button" onClick={generateToDo} className="flex items-center gap-3 p-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 rounded-xl transition-colors text-sm font-medium text-left"><ListChecks size={18} className="text-emerald-500 dark:text-emerald-400"/> アクションプラン抽出</button>
+                <button type="button" onClick={detectAnomalies} className="flex items-center gap-3 p-3 hover:bg-amber-50 dark:hover:bg-amber-900/30 text-slate-700 dark:text-slate-300 hover:text-amber-700 dark:hover:text-amber-300 rounded-xl transition-colors text-sm font-medium text-left"><MessageSquareWarning size={18} className="text-amber-500 dark:text-amber-400"/> 重複・矛盾のチェック</button>
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
+                <button type="button" onClick={clusterNodes} className="flex items-center gap-3 p-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 rounded-xl transition-colors text-sm font-medium text-left"><Network size={18} className="text-blue-500 dark:text-blue-400"/> 独立ノードの自動整理</button>
+                <button type="button" onClick={()=>{setShowAIPanel(false); setTextInputModal(true);}} className="flex items-center gap-3 p-3 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-slate-700 dark:text-slate-300 hover:text-purple-700 dark:hover:text-purple-300 rounded-xl transition-colors text-sm font-medium text-left"><TextSelect size={18} className="text-purple-500 dark:text-purple-400"/> 長文から自動生成</button>
+                <button type="button" onClick={() => imageInputRef.current?.click()} className="flex items-center gap-3 p-3 hover:bg-orange-50 dark:hover:bg-orange-900/30 text-slate-700 dark:text-slate-300 hover:text-orange-700 dark:hover:text-orange-300 rounded-xl transition-colors text-sm font-medium text-left"><ImageIcon size={18} className="text-orange-500 dark:text-orange-400"/> 画像から自動生成</button>
                 <input type="file" ref={imageInputRef} onChange={generateFromImage} accept="image/*" className="hidden" />
               </div>
             )}
@@ -1491,38 +1452,38 @@
           </div>
 
           {/* 右下: ズームコントロール */}
-          <div className="ui-element absolute bottom-16 sm:bottom-20 right-4 sm:right-6 flex gap-1 sm:gap-2 bg-white/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-lg border border-slate-200 pointer-events-auto">
-            <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><ZoomOut size={24} className="sm:w-5 sm:h-5" /></button>
-            <div className="flex items-center px-1 sm:px-2 text-sm font-medium text-slate-600 min-w-[3rem] justify-center">{Math.round(zoom * 100)}%</div>
-            <button type="button" onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><ZoomIn size={24} className="sm:w-5 sm:h-5" /></button>
-            <div className="w-px h-8 sm:h-6 bg-slate-200 my-auto mx-1"></div>
-            <button type="button" onClick={resetView} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600"><Maximize size={24} className="sm:w-5 sm:h-5" /></button>
+          <div className="ui-element absolute bottom-16 sm:bottom-20 right-4 sm:right-6 flex gap-1 sm:gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 pointer-events-auto">
+            <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300"><ZoomOut size={24} className="sm:w-5 sm:h-5" /></button>
+            <div className="flex items-center px-1 sm:px-2 text-sm font-medium text-slate-600 dark:text-slate-300 min-w-[3rem] justify-center">{Math.round(zoom * 100)}%</div>
+            <button type="button" onClick={() => setZoom(z => Math.min(3, z + 0.2))} className="p-3 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300"><ZoomIn size={24} className="sm:w-5 sm:h-5" /></button>
+            <div className="w-px h-8 sm:h-6 bg-slate-200 dark:bg-slate-700 my-auto mx-1"></div>
+            <button type="button" onClick={resetView} className="p-3 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300"><Maximize size={24} className="sm:w-5 sm:h-5" /></button>
           </div>
 
           {/* 左上: サイドバーボタン & ヘルプ */}
           <div className="ui-element absolute top-4 sm:top-6 left-4 sm:left-6 pointer-events-auto z-40 flex gap-2">
-            <button type="button" onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-2">
+            <button type="button" onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 flex items-center gap-2">
               <MapIcon size={20} /> <span className="hidden sm:inline font-bold text-sm">マイマップ</span>
             </button>
             {!showHelp ? (
-              <button type="button" onClick={() => setShowHelp(true)} className="p-3 bg-white/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 text-slate-500 hover:bg-slate-50"><Info size={24} /></button>
+              <button type="button" onClick={() => setShowHelp(true)} className="p-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700"><Info size={24} /></button>
             ) : (
-              <div className="bg-white/95 backdrop-blur p-4 sm:p-5 rounded-xl shadow-lg border border-slate-200 flex flex-col gap-3 max-w-[280px] sm:max-w-xs">
-                <div className="flex items-center justify-between text-slate-800 font-bold mb-1">
-                  <div className="flex items-center gap-2"><Info size={20} className="text-indigo-600" /><span>操作ガイド</span></div>
-                  <button type="button" onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
+              <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur p-4 sm:p-5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex flex-col gap-3 max-w-[280px] sm:max-w-xs">
+                <div className="flex items-center justify-between text-slate-800 dark:text-slate-100 font-bold mb-1">
+                  <div className="flex items-center gap-2"><Info size={20} className="text-indigo-600 dark:text-indigo-400" /><span>操作ガイド</span></div>
+                  <button type="button" onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1"><X size={20} /></button>
                 </div>
-                <div className="text-xs text-slate-600 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
-                  <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] justify-self-end whitespace-nowrap">W-Tap</span><span>独立ノード作成</span>
-                  <div className="justify-self-end"><GripHorizontal size={14} className="text-slate-500" /></div><span>全体移動・接続</span>
-                  <div className="justify-self-end"><Link2 size={14} className="text-slate-500" /></div><span>線を引き出して接続</span>
-                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">Tab</kbd><span>子ノードを追加</span>
-                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">Enter</kbd><span>兄弟ノードを追加</span>
+                <div className="text-xs text-slate-600 dark:text-slate-300 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
+                  <span className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] justify-self-end whitespace-nowrap">W-Tap</span><span>独立ノード作成</span>
+                  <div className="justify-self-end"><GripHorizontal size={14} className="text-slate-500 dark:text-slate-400" /></div><span>全体移動・接続</span>
+                  <div className="justify-self-end"><Link2 size={14} className="text-slate-500 dark:text-slate-400" /></div><span>線を引き出して接続</span>
+                  <kbd className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-mono justify-self-end">Tab</kbd><span>子ノードを追加</span>
+                  <kbd className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-mono justify-self-end">Enter</kbd><span>兄弟ノードを追加</span>
                   <div className="justify-self-end whitespace-nowrap">
-                    <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono">⌘</kbd>+<kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono">↑↓</kbd>
+                    <kbd className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-mono">⌘</kbd>+<kbd className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-mono">↑↓</kbd>
                   </div>
                   <span>ノードの順番を入れ替え</span>
-                  <kbd className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono justify-self-end">⌘+Z</kbd><span>元に戻す / やり直す</span>
+                  <kbd className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-[10px] font-mono justify-self-end">⌘+Z</kbd><span>元に戻す / やり直す</span>
                 </div>
               </div>
             )}
@@ -1530,43 +1491,49 @@
 
           {/* 右上: メインツールバー */}
           <div className="ui-element fixed top-4 sm:top-6 right-4 sm:right-6 flex flex-col items-end gap-2 z-50 pointer-events-none">
-            <div className="flex gap-1 sm:gap-2 bg-white/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-sm border border-slate-200 pointer-events-auto">
-              <button type="button" onClick={undo} disabled={past.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="元に戻す (Cmd/Ctrl+Z)"><Undo2 size={20} className="sm:w-4 sm:h-4" /></button>
-              <button type="button" onClick={redo} disabled={future.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="やり直す (Cmd/Ctrl+Shift+Z)"><Redo2 size={20} className="sm:w-4 sm:h-4" /></button>
-              <div className="w-px h-8 sm:h-6 bg-slate-200 my-auto mx-1"></div>
+            <div className="flex gap-1 sm:gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur p-1.5 sm:p-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 pointer-events-auto">
+              <button type="button" onClick={undo} disabled={past.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="元に戻す (Cmd/Ctrl+Z)"><Undo2 size={20} className="sm:w-4 sm:h-4" /></button>
+              <button type="button" onClick={redo} disabled={future.length === 0} className="p-3 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2" title="やり直す (Cmd/Ctrl+Shift+Z)"><Redo2 size={20} className="sm:w-4 sm:h-4" /></button>
+              <div className="w-px h-8 sm:h-6 bg-slate-200 dark:bg-slate-700 my-auto mx-1"></div>
               
-              <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className={`p-3 sm:p-2 rounded-lg text-slate-600 transition-colors ${isMenuOpen ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100'}`} title="メニューを開く">
+              <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className={`p-3 sm:p-2 rounded-lg transition-colors ${isMenuOpen ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`} title="メニューを開く">
                 <MenuIcon size={20} className="sm:w-4 sm:h-4" />
               </button>
             </div>
             
             {/* メニューの中身 */}
             {isMenuOpen && (
-              <div className="bg-white/95 backdrop-blur-md p-2 rounded-xl shadow-xl border border-slate-200 flex flex-col gap-1 w-48 sm:w-56 pointer-events-auto animate-in fade-in slide-in-from-top-2 origin-top-right">
-                <button type="button" onClick={() => { setIsMenuOpen(false); const newLayout = layoutType === 'tree' ? 'radial' : 'tree'; setLayoutType(newLayout); setNodesWithHistory(prev => applyAutoLayout(prev, newLayout)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <Network size={18} className="text-indigo-500" /> {layoutType === 'tree' ? '放射状に変更' : 'ツリー型に変更'}
+              <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-2 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-1 w-48 sm:w-56 pointer-events-auto animate-in fade-in slide-in-from-top-2 origin-top-right">
+                {/* ★追加: ダークモード切替ボタン */}
+                <button type="button" onClick={() => { setIsDarkMode(!isDarkMode); setIsMenuOpen(false); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  {isDarkMode ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} className="text-indigo-500" />} {isDarkMode ? 'ライトモードにする' : 'ダークモードにする'}
                 </button>
-                <button type="button" onClick={() => { setIsMenuOpen(false); setNodesWithHistory(prev => applyAutoLayout(prev)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <LayoutIcon size={18} className="text-emerald-500" /> 自動整列
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
+
+                <button type="button" onClick={() => { setIsMenuOpen(false); const newLayout = layoutType === 'tree' ? 'radial' : 'tree'; setLayoutType(newLayout); setNodesWithHistory(prev => applyAutoLayout(prev, newLayout)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Network size={18} className="text-indigo-500 dark:text-indigo-400" /> {layoutType === 'tree' ? '放射状に変更' : 'ツリー型に変更'}
                 </button>
-                <button type="button" onClick={() => { setIsMenuOpen(false); tempModelNameRef.current = modelName; setSettingsModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <SettingsIcon size={18} className="text-slate-500" /> 環境設定 (BYOK)
+                <button type="button" onClick={() => { setIsMenuOpen(false); setNodesWithHistory(prev => applyAutoLayout(prev)); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <LayoutIcon size={18} className="text-emerald-500 dark:text-emerald-400" /> 自動整列
                 </button>
-                <div className="h-px bg-slate-100 my-1 mx-2"></div>
+                <button type="button" onClick={() => { setIsMenuOpen(false); tempModelNameRef.current = modelName; setSettingsModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <SettingsIcon size={18} className="text-slate-500 dark:text-slate-400" /> 環境設定 (BYOK)
+                </button>
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                 
-                <button type="button" onClick={() => { setIsMenuOpen(false); setExportedText(buildMapText(visibleNodes)); setExportTextModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <ClipboardList size={18} className="text-purple-500" /> テキスト化（コピー）
+                <button type="button" onClick={() => { setIsMenuOpen(false); setExportedText(buildMapText(visibleNodes)); setExportTextModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <ClipboardList size={18} className="text-purple-500 dark:text-purple-400" /> テキスト化（コピー）
                 </button>
-                <button type="button" onClick={() => { setIsMenuOpen(false); takeSnapshot(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <CameraIcon size={18} className="text-rose-500" /> 画像として保存
+                <button type="button" onClick={() => { setIsMenuOpen(false); takeSnapshot(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <CameraIcon size={18} className="text-rose-500 dark:text-rose-400" /> 画像として保存
                 </button>
-                <div className="h-px bg-slate-100 my-1 mx-2"></div>
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                 
-                <button type="button" onClick={() => { setIsMenuOpen(false); fileInputRef.current?.click(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <Upload size={18} className="text-blue-500" /> ファイルから読込
+                <button type="button" onClick={() => { setIsMenuOpen(false); fileInputRef.current?.click(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Upload size={18} className="text-blue-500 dark:text-blue-400" /> ファイルから読込
                 </button>
-                <button type="button" onClick={() => { setIsMenuOpen(false); exportToHTML(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <Download size={18} className="text-blue-500" /> ファイルへ書出
+                <button type="button" onClick={() => { setIsMenuOpen(false); exportToHTML(); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium text-left">
+                  <Download size={18} className="text-blue-500 dark:text-blue-400" /> ファイルへ書出
                 </button>
               </div>
             )}
@@ -1575,7 +1542,7 @@
 
           {/* エラーメッセージ */}
           {errorMessage && (
-            <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-medium pointer-events-none flex items-center gap-3">
+            <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-medium pointer-events-none flex items-center gap-3">
               <Info size={18} className="text-amber-400"/> {errorMessage}
             </div>
           )}
@@ -1583,22 +1550,22 @@
           {/* 初期セットアップモーダル（BYOK） */}
           {setupModal && (
             <div className="absolute inset-0 z-[300] flex items-center justify-center p-4 pointer-events-auto ui-element bg-slate-900/80 backdrop-blur-sm">
-              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
-                <div className="px-6 py-5 border-b border-slate-100 bg-indigo-50">
-                  <h3 className="font-bold text-indigo-900 flex items-center gap-2 text-lg"><SettingsIcon size={24} className="text-indigo-600"/> 初期設定 (BYOK)</h3>
-                  <p className="text-xs text-indigo-700 mt-2">このツールを使用するには、ご自身のGAS URLとAPIキーが必要です。これらの情報はブラウザ内にのみ安全に保存されます。</p>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 bg-indigo-50 dark:bg-indigo-900/30">
+                  <h3 className="font-bold text-indigo-900 dark:text-indigo-100 flex items-center gap-2 text-lg"><SettingsIcon size={24} className="text-indigo-600 dark:text-indigo-400"/> 初期設定 (BYOK)</h3>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-2">このツールを使用するには、ご自身のGAS URLとAPIキーが必要です。これらの情報はブラウザ内にのみ安全に保存されます。</p>
                 </div>
                 <div className="p-6 flex flex-col gap-4">
                   <div>
-                    <p className="text-sm text-slate-700 font-bold mb-1 flex items-center gap-1"><ServerIcon size={14}/> GAS デプロイURL</p>
-                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="https://script.google.com/macros/s/..." defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-bold mb-1 flex items-center gap-1"><ServerIcon size={14}/> GAS デプロイURL</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-900 dark:text-white" placeholder="https://script.google.com/macros/s/..." defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-700 font-bold mb-1 flex items-center gap-1"><Wand2 size={14}/> Gemini API キー</p>
-                    <input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="AIzaSy..." defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-bold mb-1 flex items-center gap-1"><Wand2 size={14}/> Gemini API キー</p>
+                    <input type="password" className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-900 dark:text-white" placeholder="AIzaSy..." defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end bg-slate-50 dark:bg-slate-900">
                   <button type="button" onClick={() => {
                       const newGas = tempGasUrlRef.current?.trim();
                       const newApi = tempApiKeyRef.current?.trim();
@@ -1619,29 +1586,29 @@
           {/* AIモデル・環境設定モーダル */}
           {settingsModal && (
             <div className="absolute inset-0 z-[120] flex items-center justify-center p-4 pointer-events-auto ui-element">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setSettingsModal(false)}></div>
-              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative max-h-[90vh] overflow-y-auto">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><SettingsIcon size={20} className="text-slate-600"/> 環境設定</h3>
-                  <button type="button" onClick={() => setSettingsModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setSettingsModal(false)}></div>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative max-h-[90vh] overflow-y-auto">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><SettingsIcon size={20} className="text-slate-600 dark:text-slate-400"/> 環境設定</h3>
+                  <button type="button" onClick={() => setSettingsModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={20}/></button>
                 </div>
                 <div className="p-6 flex flex-col gap-4">
                   <div>
-                    <p className="text-sm text-slate-700 font-bold mb-1">GAS デプロイURL</p>
-                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-bold mb-1">GAS デプロイURL</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-900 dark:text-white" defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-700 font-bold mb-1">Gemini API キー</p>
-                    <input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-bold mb-1">Gemini API キー</p>
+                    <input type="password" className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-900 dark:text-white" defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-700 font-bold mb-1">Gemini モデル名</p>
-                    <p className="text-xs text-slate-500 mb-2">（デフォルト: gemini-3.1-flash-lite-preview）</p>
-                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={modelName} onChange={(e) => tempModelNameRef.current = e.target.value} />
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-bold mb-1">Gemini モデル名</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">（デフォルト: gemini-3.1-flash-lite-preview）</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white dark:bg-slate-900 dark:text-white" defaultValue={modelName} onChange={(e) => tempModelNameRef.current = e.target.value} />
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                  <button type="button" onClick={() => setSettingsModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900">
+                  <button type="button" onClick={() => setSettingsModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">キャンセル</button>
                   <button type="button" onClick={() => {
                       const newGas = tempGasUrlRef.current?.trim() || gasUrl;
                       const newApi = tempApiKeyRef.current?.trim() || apiKey;
@@ -1651,7 +1618,7 @@
                       localStorage.setItem('mindmap_api_key', newApi);
                       localStorage.setItem('gemini_model_name', mName);
                       setSettingsModal(false); setErrorMessage("設定を保存しました。");
-                      if(newGas !== gasUrl) window.location.reload(); // URLが変わった場合はリロード推奨
+                      if(newGas !== gasUrl) window.location.reload(); 
                     }} 
                     className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
                   >設定を保存する</button>
@@ -1661,26 +1628,25 @@
           )}
 
           
-          {/* ★修正: テキスト出力モーダル（画面最大化・折り返し対応） */}
+          {/* テキスト出力モーダル */}
           {exportTextModal && (
             <div className="absolute inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 pointer-events-auto ui-element">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setExportTextModal(false)}></div>
-              <div className="bg-white w-full max-w-[95vw] h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><ClipboardList size={20} className="text-slate-600"/> 構造をテキスト化</h3>
-                  <button type="button" onClick={() => setExportTextModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setExportTextModal(false)}></div>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-[95vw] h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><ClipboardList size={20} className="text-slate-600 dark:text-slate-400"/> 構造をテキスト化</h3>
+                  <button type="button" onClick={() => setExportTextModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={20}/></button>
                 </div>
                 <div className="p-4 sm:p-6 flex-1 flex flex-col min-h-0">
-                  <p className="text-sm text-slate-600 mb-3">現在の{isFocusActive ? 'フォーカス対象' : 'マインドマップ'}の階層構造です。端で自動折り返しされるようになりました。</p>
-                  {/* ★修正ポイント: whitespace-pre-wrap に変更して折り返しを有効化、h-fullで高さを最大化 */}
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">現在の{isFocusActive ? 'フォーカス対象' : 'マインドマップ'}の階層構造です。端で自動折り返しされるようになりました。</p>
                   <textarea 
                     readOnly 
                     value={exportedText} 
-                    className="w-full flex-1 p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-slate-50 font-mono whitespace-pre-wrap overflow-y-auto" 
+                    className="w-full flex-1 p-4 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-100 font-mono whitespace-pre-wrap overflow-y-auto" 
                   />
                 </div>
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                  <button type="button" onClick={() => setExportTextModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">閉じる</button>
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900">
+                  <button type="button" onClick={() => setExportTextModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">閉じる</button>
                   <button type="button" onClick={() => { navigator.clipboard?.writeText(exportedText).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} 
                     className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors flex items-center gap-2"
                   >
@@ -1694,18 +1660,18 @@
           {/* テキストから生成モーダル */}
           {textInputModal && (
             <div className="absolute inset-0 z-[110] flex items-center justify-center p-4 pointer-events-auto ui-element">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setTextInputModal(false)}></div>
-              <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><TextSelect size={20} className="text-purple-600"/> テキストからマップ生成</h3>
-                  <button type="button" onClick={() => setTextInputModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setTextInputModal(false)}></div>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><TextSelect size={20} className="text-purple-600 dark:text-purple-400"/> テキストからマップ生成</h3>
+                  <button type="button" onClick={() => setTextInputModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={20}/></button>
                 </div>
                 <div className="p-6">
-                  <p className="text-sm text-slate-600 mb-3">会議の議事録や長文を貼り付けてください。AIが階層構造を読み取り一瞬でマインドマップに変換します。</p>
-                  <textarea value={inputText} onChange={(e)=>setInputText(e.target.value)} className="w-full h-48 p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm bg-slate-50" placeholder="ここにテキストを入力..." autoFocus />
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">会議の議事録や長文を貼り付けてください。AIが階層構造を読み取り一瞬でマインドマップに変換します。</p>
+                  <textarea value={inputText} onChange={(e)=>setInputText(e.target.value)} className="w-full h-48 p-4 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm bg-slate-50 dark:bg-slate-900 dark:text-slate-100" placeholder="ここにテキストを入力..." autoFocus />
                 </div>
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                  <button type="button" onClick={() => setTextInputModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900">
+                  <button type="button" onClick={() => setTextInputModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">キャンセル</button>
                   <button type="button" onClick={generateFromText} disabled={!inputText.trim()} className="px-5 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors flex items-center gap-2"><Sparkles size={16}/> 生成する</button>
                 </div>
               </div>
@@ -1715,28 +1681,28 @@
           {/* 結果表示モーダル */}
           {aiModal.isOpen && (
             <div className="absolute inset-0 z-[110] flex items-center justify-center p-4 sm:p-8 pointer-events-auto ui-element">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setAiModal({isOpen:false})}></div>
-              <div className="bg-white w-full max-w-3xl max-h-full rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 z-10 relative">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50 rounded-t-2xl">
-                  <h3 className="font-bold text-indigo-900 text-lg">{aiModal.title}</h3>
+              <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto" onClick={() => setAiModal({isOpen:false})}></div>
+              <div className="bg-white dark:bg-slate-800 w-full max-w-3xl max-h-full rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-indigo-50/50 dark:bg-indigo-900/30 rounded-t-2xl">
+                  <h3 className="font-bold text-indigo-900 dark:text-indigo-100 text-lg">{aiModal.title}</h3>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => { document.execCommand('copy'); navigator.clipboard?.writeText(aiModal.content).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-sm font-medium">
+                    <button type="button" onClick={() => { document.execCommand('copy'); navigator.clipboard?.writeText(aiModal.content).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false), 2000); }} className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg transition-colors flex items-center gap-1 text-sm font-medium">
                       {copied ? <Check size={18}/> : <Copy size={18}/>} {copied ? 'コピーしました' : 'コピー'}
                     </button>
-                    <button type="button" onClick={() => setAiModal({isOpen:false})} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"><X size={24}/></button>
+                    <button type="button" onClick={() => setAiModal({isOpen:false})} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><X size={24}/></button>
                   </div>
                 </div>
                 <div className="p-6 overflow-y-auto" style={{ maxHeight: '70vh' }}>
-                  <div className="prose prose-sm sm:prose-base max-w-none prose-indigo prose-headings:font-bold prose-a:text-indigo-600">
-                    <pre className="whitespace-pre-wrap font-sans text-slate-700 bg-transparent p-0 m-0 border-none text-base leading-relaxed">
+                  <div className="prose prose-sm sm:prose-base max-w-none prose-indigo prose-headings:font-bold prose-a:text-indigo-600 dark:prose-a:text-indigo-400 dark:prose-invert">
+                    <pre className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-300 bg-transparent p-0 m-0 border-none text-base leading-relaxed">
                       {aiModal.content.split('\n').map((line, i) => {
-                        if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-extrabold mt-6 mb-4 text-slate-900 border-b pb-2">{line.substring(2)}</h1>;
-                        if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-5 mb-3 text-slate-800">{line.substring(3)}</h2>;
-                        if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-4 mb-2 text-slate-800">{line.substring(4)}</h3>;
-                        if (line.startsWith('- [ ] ')) return <div key={i} className="flex items-start gap-2 my-2"><div className="w-5 h-5 mt-0.5 border-2 border-slate-300 rounded flex-shrink-0"></div><span>{line.substring(6).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
-                        if (line.startsWith('- ')) return <div key={i} className="flex items-start gap-2 my-1"><div className="w-1.5 h-1.5 mt-2 rounded-full bg-slate-400 flex-shrink-0"></div><span>{line.substring(2).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
+                        if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-extrabold mt-6 mb-4 text-slate-900 dark:text-slate-100 border-b dark:border-slate-700 pb-2">{line.substring(2)}</h1>;
+                        if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-5 mb-3 text-slate-800 dark:text-slate-200">{line.substring(3)}</h2>;
+                        if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-4 mb-2 text-slate-800 dark:text-slate-200">{line.substring(4)}</h3>;
+                        if (line.startsWith('- [ ] ')) return <div key={i} className="flex items-start gap-2 my-2"><div className="w-5 h-5 mt-0.5 border-2 border-slate-300 dark:border-slate-600 rounded flex-shrink-0"></div><span>{line.substring(6).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
+                        if (line.startsWith('- ')) return <div key={i} className="flex items-start gap-2 my-1"><div className="w-1.5 h-1.5 mt-2 rounded-full bg-slate-400 dark:bg-slate-500 flex-shrink-0"></div><span>{line.substring(2).replace(/\*\*(.*?)\*\*/g, '$1')}</span></div>;
                         const formattedLine = line.split(/(\*\*.*?\*\*)/).map((part, j) => {
-                          if (part.startsWith('**') && part.endsWith('**')) return <strong key={j} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+                          if (part.startsWith('**') && part.endsWith('**')) return <strong key={j} className="font-bold text-slate-900 dark:text-slate-100">{part.slice(2, -2)}</strong>;
                           return part;
                         });
                         return <p key={i} className="my-2 min-h-[1em]">{formattedLine}</p>;
@@ -1744,7 +1710,7 @@
                     </pre>
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50 rounded-b-2xl">
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end bg-slate-50 dark:bg-slate-900 rounded-b-2xl">
                   <button type="button" onClick={() => setAiModal({isOpen:false})} className="px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-colors">閉じる</button>
                 </div>
               </div>
