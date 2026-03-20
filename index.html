@@ -24,8 +24,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxgDw8JHz98WLFUKpkDPf0tP15POaI2KpDxDf9ev9UDrv1XsFTk1W89yWKAuRLkpV8t/exec";
-
     const createIcon = (faClass) => ({ size = 24, className = "" }) => (
       <i className={`${faClass} ${className}`} style={{ fontSize: size, width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></i>
     );
@@ -146,40 +144,48 @@
       }
     };
 
-    // --- GAS API クライアント ---
-    const fetchMapsAndKeyFromGAS = async () => {
+    // --- GAS API クライアント (URLを引数で受け取る仕様) ---
+    const fetchMapsFromGAS = async (gasUrl) => {
       try { 
-        const res = await fetch(`${GAS_URL}?action=list`); 
+        const res = await fetch(`${gasUrl}?action=list`); 
         const json = await res.json(); 
-        return { maps: json.success ? json.maps : [], apiKey: json.apiKey || '' }; 
-      } catch (e) { console.error("Fetch Error:", e); return { maps: [], apiKey: '' }; }
+        return json.success ? json.maps : []; 
+      } catch (e) { console.error("Fetch Error:", e); return []; }
     };
 
-    const loadMapFromGAS = async (id) => {
-      try { const res = await fetch(`${GAS_URL}?action=load&id=${id}`); const json = await res.json(); return json.success ? json.map : null; } 
+    const loadMapFromGAS = async (gasUrl, id) => {
+      try { const res = await fetch(`${gasUrl}?action=load&id=${id}`); const json = await res.json(); return json.success ? json.map : null; } 
       catch (e) { console.error("Load Map Error:", e); return null; }
     };
 
-    const saveMapToGAS = async (id, title, nodes) => {
+    const saveMapToGAS = async (gasUrl, id, title, nodes) => {
       try {
         const payload = { action: 'save', id, title, nodes };
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        await fetch(gasUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
         return true; 
       } catch (e) { console.error("Save Map Error:", e); return false; }
     };
 
-    const deleteMapFromGAS = async (id) => {
+    const deleteMapFromGAS = async (gasUrl, id) => {
       try {
         const payload = { action: 'delete', id };
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        await fetch(gasUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
         return true;
       } catch (e) { console.error("Delete Map Error:", e); return false; }
     };
 
     function App() {
-      const [apiKey, setApiKey] = useState('');
+      // ★修正: localStorageから各種設定を読み込む。なければ空文字
+      const [gasUrl, setGasUrl] = useState(localStorage.getItem('mindmap_gas_url') || '');
+      const [apiKey, setApiKey] = useState(localStorage.getItem('mindmap_api_key') || '');
       const [modelName, setModelName] = useState(localStorage.getItem('gemini_model_name') || 'gemini-3.1-flash-lite-preview');
+      
       const [settingsModal, setSettingsModal] = useState(false);
+      // ★追加: 初回セットアップモーダル（URLかAPIキーがない場合に強制表示）
+      const [setupModal, setSetupModal] = useState(!localStorage.getItem('mindmap_gas_url') || !localStorage.getItem('mindmap_api_key'));
+      
+      const tempGasUrlRef = useRef(gasUrl);
+      const tempApiKeyRef = useRef(apiKey);
       const tempModelNameRef = useRef(modelName);
 
       const [maps, setMaps] = useState([]);
@@ -324,10 +330,11 @@
       // --- GASからの初期データロード ---
       useEffect(() => {
         let isMounted = true;
-        fetchMapsAndKeyFromGAS().then(({ maps: mapList, apiKey: loadedKey }) => {
-          if (!isMounted) return;
-          if (loadedKey) setApiKey(loadedKey);
+        // ★修正: gasUrl と apiKey が両方設定されている場合のみロードを開始する
+        if (!gasUrl || !apiKey || setupModal) return;
 
+        fetchMapsFromGAS(gasUrl).then((mapList) => {
+          if (!isMounted) return;
           if (!hasInitializedRef.current) {
             hasInitializedRef.current = true;
             setMaps(mapList);
@@ -339,7 +346,7 @@
           }
         });
         return () => { isMounted = false; };
-      }, []); 
+      }, [gasUrl, apiKey, setupModal]);
 
       // --- GASへの自動同期 ---
       useEffect(() => {
@@ -360,7 +367,7 @@
             return [{ id: targetMapId, title, updatedAt: Date.now() }, ...prev];
           });
 
-          await saveMapToGAS(targetMapId, title, JSON.stringify(nodes));
+          await saveMapToGAS(gasUrl, targetMapId, title, JSON.stringify(nodes));
           setSyncStatus('クラウド保存完了');
           setTimeout(() => setSyncStatus(''), 2000);
         }, 1500); 
@@ -705,7 +712,7 @@
         });
 
         setSyncStatus('新規作成中...');
-        saveMapToGAS(newId, newTitle, JSON.stringify(freshNodes))
+        saveMapToGAS(gasUrl, newId, newTitle, JSON.stringify(freshNodes))
           .then(() => {
             setSyncStatus('クラウド保存完了'); 
             setTimeout(() => setSyncStatus(''), 2000);
@@ -719,7 +726,7 @@
         hasInitializedRef.current = true; 
 
         setSyncStatus('読み込み中...');
-        const mapData = await loadMapFromGAS(id);
+        const mapData = await loadMapFromGAS(gasUrl, id);
         if (mapData) {
           skipNextSaveRef.current = true;
           changeCurrentMapId(id);
@@ -745,7 +752,7 @@
           else { setNodes(getInitialNodes()); clearFocus(); }
         }
 
-        const success = await deleteMapFromGAS(id);
+        const success = await deleteMapFromGAS(gasUrl, id);
         if (success) { setSyncStatus(''); } else { setSyncStatus('エラー'); }
       };
 
@@ -1543,7 +1550,7 @@
                   <LayoutIcon size={18} className="text-emerald-500" /> 自動整列
                 </button>
                 <button type="button" onClick={() => { setIsMenuOpen(false); tempModelNameRef.current = modelName; setSettingsModal(true); }} className="flex items-center gap-3 p-3 sm:p-2.5 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors text-sm font-medium text-left">
-                  <SettingsIcon size={18} className="text-slate-500" /> AIモデル設定
+                  <SettingsIcon size={18} className="text-slate-500" /> 環境設定 (BYOK)
                 </button>
                 <div className="h-px bg-slate-100 my-1 mx-2"></div>
                 
@@ -1573,26 +1580,78 @@
             </div>
           )}
 
-          {/* AIモデル設定モーダル */}
+          {/* 初期セットアップモーダル（BYOK） */}
+          {setupModal && (
+            <div className="absolute inset-0 z-[300] flex items-center justify-center p-4 pointer-events-auto ui-element bg-slate-900/80 backdrop-blur-sm">
+              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+                <div className="px-6 py-5 border-b border-slate-100 bg-indigo-50">
+                  <h3 className="font-bold text-indigo-900 flex items-center gap-2 text-lg"><SettingsIcon size={24} className="text-indigo-600"/> 初期設定 (BYOK)</h3>
+                  <p className="text-xs text-indigo-700 mt-2">このツールを使用するには、ご自身のGAS URLとAPIキーが必要です。これらの情報はブラウザ内にのみ安全に保存されます。</p>
+                </div>
+                <div className="p-6 flex flex-col gap-4">
+                  <div>
+                    <p className="text-sm text-slate-700 font-bold mb-1 flex items-center gap-1"><ServerIcon size={14}/> GAS デプロイURL</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="https://script.google.com/macros/s/..." defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-700 font-bold mb-1 flex items-center gap-1"><Wand2 size={14}/> Gemini API キー</p>
+                    <input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="AIzaSy..." defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50">
+                  <button type="button" onClick={() => {
+                      const newGas = tempGasUrlRef.current?.trim();
+                      const newApi = tempApiKeyRef.current?.trim();
+                      if (!newGas || !newApi) { setErrorMessage("URLとAPIキーの両方を入力してください。"); return; }
+                      setGasUrl(newGas); setApiKey(newApi);
+                      localStorage.setItem('mindmap_gas_url', newGas);
+                      localStorage.setItem('mindmap_api_key', newApi);
+                      setSetupModal(false);
+                      setErrorMessage("設定を保存しました。データを読み込みます。");
+                    }} 
+                    className="px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-colors w-full"
+                  >利用を開始する</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AIモデル・環境設定モーダル */}
           {settingsModal && (
             <div className="absolute inset-0 z-[120] flex items-center justify-center p-4 pointer-events-auto ui-element">
               <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm pointer-events-auto" onClick={() => setSettingsModal(false)}></div>
-              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative">
+              <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 z-10 relative max-h-[90vh] overflow-y-auto">
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><SettingsIcon size={20} className="text-slate-600"/> AIモデル設定</h3>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2"><SettingsIcon size={20} className="text-slate-600"/> 環境設定</h3>
                   <button type="button" onClick={() => setSettingsModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                 </div>
-                <div className="p-6 flex flex-col gap-2">
-                  <p className="text-sm text-slate-600 font-bold">Gemini モデル名</p>
-                  <p className="text-xs text-slate-500 mb-2">使用するAIモデルのバージョンを手動で指定できます。（デフォルト: gemini-3.1-flash-lite-preview）</p>
-                  <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={modelName} onChange={(e) => tempModelNameRef.current = e.target.value} />
+                <div className="p-6 flex flex-col gap-4">
+                  <div>
+                    <p className="text-sm text-slate-700 font-bold mb-1">GAS デプロイURL</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={gasUrl} onChange={(e) => tempGasUrlRef.current = e.target.value} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-700 font-bold mb-1">Gemini API キー</p>
+                    <input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={apiKey} onChange={(e) => tempApiKeyRef.current = e.target.value} />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-700 font-bold mb-1">Gemini モデル名</p>
+                    <p className="text-xs text-slate-500 mb-2">（デフォルト: gemini-3.1-flash-lite-preview）</p>
+                    <input type="text" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" defaultValue={modelName} onChange={(e) => tempModelNameRef.current = e.target.value} />
+                  </div>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
                   <button type="button" onClick={() => setSettingsModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">キャンセル</button>
                   <button type="button" onClick={() => {
-                      const mName = tempModelNameRef.current.trim() || 'gemini-3.1-flash-lite-preview';
-                      setModelName(mName); localStorage.setItem('gemini_model_name', mName);
-                      setSettingsModal(false); setErrorMessage("AIモデルの設定を保存しました。");
+                      const newGas = tempGasUrlRef.current?.trim() || gasUrl;
+                      const newApi = tempApiKeyRef.current?.trim() || apiKey;
+                      const mName = tempModelNameRef.current?.trim() || 'gemini-3.1-flash-lite-preview';
+                      setGasUrl(newGas); setApiKey(newApi); setModelName(mName);
+                      localStorage.setItem('mindmap_gas_url', newGas);
+                      localStorage.setItem('mindmap_api_key', newApi);
+                      localStorage.setItem('gemini_model_name', mName);
+                      setSettingsModal(false); setErrorMessage("設定を保存しました。");
+                      if(newGas !== gasUrl) window.location.reload(); // URLが変わった場合はリロード推奨
                     }} 
                     className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
                   >設定を保存する</button>
