@@ -1166,7 +1166,15 @@
                     boxShadow: isSelected && !isDragged ? '0 10px 25px -5px rgba(0,0,0,0.2)' : '0 4px 6px -1px rgba(0,0,0,0.1)',
                     zIndex: isSelected || isDropTarget || isDragged || isSelectedForFocus ? 30 : 20
                   }}
-                  onPointerDown={(e) => { e.stopPropagation(); setSelectedNodeId(node.id); setNodeAIMenuId(null); if(editingNodeId && editingNodeId !== node.id) handleFinishEdit(); }}
+                  onPointerDown={(e) => { 
+                    e.stopPropagation(); 
+                    // フォーカス対象をストック中の場合は、タップするだけで対象に追加/解除する
+                    if (!isFocusActive && focusSelection.size > 0) {
+                      toggleFocusSelection(node.id);
+                    } else {
+                      setSelectedNodeId(node.id); setNodeAIMenuId(null); if(editingNodeId && editingNodeId !== node.id) handleFinishEdit(); 
+                    }
+                  }}
                   onDoubleClick={(e) => { e.stopPropagation(); setEditingNodeId(node.id); }}
                 >
                   {isEditing ? (
